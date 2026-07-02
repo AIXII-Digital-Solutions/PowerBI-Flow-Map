@@ -1,0 +1,205 @@
+// Bundled base CSS for the Leaflet map + MapLibre GL vector basemap (imported verbatim,
+// not less-parsed) so the map panes, controls and GL canvas position correctly.
+@import (inline) "../node_modules/leaflet/dist/leaflet.css";
+@import (inline) "../node_modules/maplibre-gl/dist/maplibre-gl.css";
+
+/* ---- Flowmap basemap (Leaflet + MapLibre GL) ---- */
+/* Neutralise Leaflet's light (#ddd) default background so no light frame flashes. */
+.leaflet-container {
+    background: #0d0d0f;
+    outline: 0;
+    outline-offset: 0;
+}
+.flowmap-basemap {
+    width: 100%;
+    height: 100%;
+    background: #0d0d0f;
+}
+/* Fixed viewport overlay carrying the flow svg + canvas (re-projected every frame). */
+.flowmap-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.maplibregl-map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+}
+.maplibregl-canvas-container,
+.maplibregl-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    outline: none;
+}
+/* On-map Dark/Light switcher (top-right), matching the reference basemap control. */
+.flowmap-style-control {
+    position: absolute;
+    z-index: 9999;
+    top: 10px;
+    right: 12px;
+    display: flex;
+    overflow: hidden;
+    border: 1px solid rgba(120, 130, 145, 0.26);
+    border-radius: 6px;
+    background: rgba(120, 125, 135, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+    font-family: "Segoe UI", Arial, sans-serif;
+    button {
+        min-width: 48px;
+        min-height: 23px;
+        border: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.14);
+        background: transparent;
+        color: #e5e7eb;
+        padding: 3px 10px;
+        font-size: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    button:last-child {
+        border-right: 0;
+    }
+    button:hover {
+        background: rgba(120, 125, 135, 0.5);
+    }
+    button.active {
+        background: #111827;
+        color: #f8fafc;
+    }
+}
+
+svg {
+    pointer-events: none;
+}
+
+.glyph {
+    cursor: pointer;
+    pointer-events: visiblePainted;
+}
+
+
+.MicrosoftMap, svg {
+    cursor: default;
+}
+
+
+
+.pin path {
+    stroke:#999;
+    fill:#F2C811;
+}
+
+.pin.dirty path {
+    fill:#f08300;
+}
+.pin.invalid path{
+    fill:#c0c6c9;
+}
+
+.pin path:hover {
+    stroke: black;
+}
+
+svg .flow {
+    cursor: pointer;
+}
+
+.tip {
+    pointer-events: none;
+    position: absolute;
+    display: flex;
+    .arrow {
+        width:0px;
+        height:0px;
+        border-style: solid;
+        border-width: 7px;
+        border-color: transparent;
+    }
+    .content-wrap {
+        padding: 7px;
+        font-size: 11px;
+    }
+}
+.tip.top {
+  flex-direction: column-reverse;
+}
+.tip.bottom {
+  flex-direction: column;
+}
+.tip.left {
+  flex-direction: row-reverse;
+}
+.tip.right {
+  flex-direction: row;
+}
+
+.war {
+    pointer-events: none;
+    font-size: 11px;
+    .header {
+        font-weight: bold;
+        padding-bottom: 4px;
+        font-size: 12px;
+        color: darkred;
+    }
+    .row {
+        display: table-row;
+    }
+    .sect {
+        display: table-cell;
+        text-transform: uppercase;
+        padding-right: 10px;
+        max-width: 200px;
+    }
+    .value {        
+        display: table-cell;
+        max-width: 260px;
+    }
+}
+
+.info {
+  pointer-events: none;
+  font-size: 11px;
+  .header {
+      font-weight: bold;
+      padding-left: 1px;
+      padding-bottom: 4px;
+      max-width: 240px;
+      letter-spacing: 1px;
+      word-wrap: break-word;      
+  }
+  .row {
+      display: table-row;
+  }
+  .cell {
+    display: table-cell;
+    max-width: 240px;
+    vertical-align: middle;
+    padding-top: 1px;
+    padding-bottom: 1px;
+  }
+  .color {
+    max-width: 13px;
+    padding: 1px 4px 1px 0px;
+    svg {
+        height:14px;
+    }
+  }
+  .title {
+    font-family: helvetica, arial, sans-serif;
+    text-transform: uppercase;
+    padding-top: 3px;
+    padding-right: 12px;
+  }
+  .value {
+    font-family: helvetica, arial, sans-serif;
+    font-weight: bold;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+}
