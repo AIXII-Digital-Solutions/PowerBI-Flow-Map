@@ -13,36 +13,31 @@ export class Format {
         width_label: ''
     };
 
-    style = {
+    // "Flow lines" card — merges the former Visual style + Color + Width objects.
+    // color*/width* are prefixed so the two encodings can share one object (and one
+    // per-item persist store) without property-name collisions.
+    flow = {
+        // style
         style: null as 'straight' | 'flow' | 'arc',//depends
         direction: 'out' as 'in' | 'out',
-        limit: 5
+        limit: 5,
+        // color
+        colorCustomize: true,
+        colorAutofill: false,
+        colorItem: { solid: { color: '#01B8AA' } },
+        colorMin: { solid: { color: '#99e3dd' } },
+        colorMax: { solid: { color: '#015c55' } },
+        // width
+        widthCustomize: true,
+        widthItem: 2,
+        widthScale: 'linear' as 'linear' | 'log' | 'none',
+        widthMin: 2,
+        widthMax: 10,
+        widthUnit: null as number//depends
     };
 
-    width = {
-        customize: true,
-        item: 2,
-        scale: 'linear' as 'linear' | 'log' | 'none',
-        min: 2,
-        max: 10,
-        unit: null as number//depends
-    };
-
-    color = {
-        item: { solid: { color: '#01B8AA' } },
-        min: { solid: { color: '#99e3dd' } },
-        max: { solid: { color: '#015c55' } },
-        autofill: false,
-        customize: true
-    };
-
-    advance = {
-        relocate: false,
-        located: true,
-        unlocated: true
-    };
-
-    // Leaflet + MapLibre GL vector basemap settings (mirrors PowerBI-RealTimePos-Map).
+    // "Map" card — Leaflet + MapLibre GL basemap (mirrors PowerBI-RealTimePos-Map) plus
+    // the former Advanced object (manual point placement / pin visibility).
     map = {
         style: 'dark' as 'dark' | 'light',
         followTheme: true,
@@ -53,7 +48,10 @@ export class Format {
         waterDark: { solid: { color: '#141417' } },
         landLight: { solid: { color: '#d4dadc' } },
         waterLight: { solid: { color: '#ffffff' } },
-        labelOpacity: 60
+        labelOpacity: 60,
+        relocate: false,
+        located: true,
+        unlocated: true
     };
 
     valueFormat = new ValueFormat();

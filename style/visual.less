@@ -72,6 +72,36 @@
     }
 }
 
+/* Zoom control (top-left) — dark & subtle, matching the reference basemap. */
+.flowmap-basemap .leaflet-control-zoom {
+    border: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+}
+.flowmap-basemap .leaflet-control-zoom a {
+    width: 26px;
+    height: 26px;
+    background: rgba(120, 125, 135, 0.34);
+    border-color: rgba(120, 130, 145, 0.3);
+    color: #e5e7eb;
+    line-height: 26px;
+    transition: background 0.15s ease;
+}
+.flowmap-basemap .leaflet-control-zoom a:hover {
+    background: rgba(120, 125, 135, 0.55);
+}
+/* Attribution (bottom-right) — dark & subtle, matching the reference basemap. */
+.flowmap-basemap .leaflet-control-attribution {
+    background: rgba(5, 6, 8, 0.72);
+    color: #cbd5e1;
+    max-width: ~"min(420px, calc(100% - 16px))";
+    font-size: 9px;
+    line-height: 1.2;
+    opacity: 0.72;
+}
+.flowmap-basemap .leaflet-control-attribution a {
+    color: #f8fafc;
+}
+
 svg {
     pointer-events: none;
 }
@@ -82,7 +112,7 @@ svg {
 }
 
 
-.MicrosoftMap, svg {
+.flowmap-basemap, svg {
     cursor: default;
 }
 

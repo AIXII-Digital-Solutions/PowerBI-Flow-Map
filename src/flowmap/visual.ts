@@ -35,7 +35,7 @@ class helper {
     }
 
     private static _tips(ctx: Ctx, rows: number[], name: Read<string>, header: string, value: Read<string[]>) {
-        const tops = helper._top(ctx, rows), color = ctx.cat('color') && ctx.meta.color.customize;
+        const tops = helper._top(ctx, rows), color = ctx.cat('color') && ctx.meta.flow.colorCustomize;
         const rowToColor = (r: number) => color ? app.$state.color(r) : undefined;
         const result = tops.map(r => tooltip.item(value(r).join(', '), name(r), header, rowToColor(r)));
         if (tops.length < rows.length) {
@@ -108,12 +108,12 @@ export class Visual implements IVisual {
         selex(this._target = options.element).sty.cursor('default');
         tooltip.init(options);
         const ctx = this._ctx = new Context(options.host, new Format());
-        ctx.fmt.width.bind('width', "item", "customize");
-        ctx.fmt.color.bind("color", "item", 'customize', 'autofill', k => <Fill>{ solid: { color: ctx.palette(k) } });
+        ctx.fmt.flow.bind('width', "widthItem", "widthCustomize");
+        ctx.fmt.flow.bind("color", "colorItem", 'colorCustomize', 'colorAutofill', k => <Fill>{ solid: { color: ctx.palette(k) } });
         ctx.fmt.legend.bind('width', 'width_label', 'width', 'width_default', '');
         ctx.fmt.legend.bind('color', 'color_label', 'color', 'color_default', '');
         app.events.flow.pathInited = group => {
-            tooltip.add(group, arg => helper.pathTooltip(this._ctx, arg.data.leafs as number[], ctx.meta.style.direction));
+            tooltip.add(group, arg => helper.pathTooltip(this._ctx, arg.data.leafs as number[], ctx.meta.flow.direction));
         };
         app.events.popup.onChanged = addrs => persist.banner.write(addrs, 10);
         app.events.pin.onDrag = (addr, loc) => {
@@ -128,20 +128,22 @@ export class Visual implements IVisual {
         const ctx = this._ctx, legend = ctx.fmt.legend;
         const autofill = role === 'color' ? 'color_default' : 'width_default';
         const label = role === 'color' ? 'color_label' : 'width_label';
+        const itemProp = role === 'color' ? 'colorItem' : 'widthItem';
+        const custProp = role === 'color' ? 'colorCustomize' : 'widthCustomize';
         if (!legend.config(role)) {
             return {};//hide
         }
         const cat = ctx.cat(role);
-        if (!cat || !ctx.meta[role].customize) {
+        if (!cat || !ctx.meta.flow[custProp]) {
             const txt = (legend.config(label) || '').trim();
-            return txt ? { [ctx.config(role, 'item')]: txt } : {};
+            return txt ? { [ctx.config('flow', itemProp)]: txt } : {};
         }
         else if (cat.type.numeric) {
             return null;//smooth
         }
         else {
             //has cat && distinct
-            const labels = ctx.labels(ctx.binding(role, 'item'), legend.special(label));
+            const labels = ctx.labels(ctx.binding('flow', itemProp), legend.special(label));
             if (legend.config(autofill)) {
                 return dict(labels, r => r.key, r => r.value || r.name);
             }
@@ -215,37 +217,37 @@ export class Visual implements IVisual {
         let groups = null as number[][];
 
         //swith source/target
-        if (ctx.meta.style.direction === 'in') {
+        if (ctx.meta.flow.direction === 'in') {
             [config.source, config.target] = [config.target, config.source];
             sourceRole = 'Dest';
         }
         /* #endregion */
 
         /* #region  color */
-        if (!ctx.cat('color') || !ctx.meta.color.customize) {
-            const color = ctx.config('color', 'item');
+        if (!ctx.cat('color') || !ctx.meta.flow.colorCustomize) {
+            const color = ctx.config('flow', 'colorItem');
             config.color = _ => color;
         }
         else if (ctx.type('color').numeric) {
             const values = ctx.nums('color');
             config.color = r => values[r];
-            config.color.min = ctx.config('color', 'min');
-            config.color.max = ctx.config('color', 'max');
+            config.color.min = ctx.config('flow', 'colorMin');
+            config.color.max = ctx.config('flow', 'colorMax');
         }
         else {
-            config.color = ctx.fmt.color.item('item');
+            config.color = ctx.fmt.flow.item('colorItem');
         }
         /* #endregion */
 
         /* #region  update style */
-        config.style = ctx.meta.style.style;
+        config.style = ctx.meta.flow.style;
         if (config.style === null) {
             if (config.color.max) {
                 config.style = ctx.rows().length < 512 ? 'arc' : 'straight';
             }
             else {
                 groups = values(groupBy(ctx.rows(), ctx.key(sourceRole, 'color')));
-                if (keys(groups).length <= ctx.meta.style.limit) {
+                if (keys(groups).length <= ctx.meta.flow.limit) {
                     config.style = 'flow';
                 }
                 else {
@@ -262,7 +264,7 @@ export class Visual implements IVisual {
 
         /* #region  width */
         if (!ctx.cat('width') || ctx.type('width').numeric) {
-            const { max, min, item, unit, scale } = ctx.meta.width;
+            const { widthMax: max, widthMin: min, widthItem: item, widthUnit: unit, widthScale: scale } = ctx.meta.flow;
             if (config.style !== 'flow' && !ctx.cat('width')) {
                 config.weight = { conv: _ => item, scale: null };
             }
@@ -273,11 +275,11 @@ export class Visual implements IVisual {
         }
         else {
             //has width column and is discrete
-            if (ctx.meta.width.customize) {
-                config.weight = { conv: ctx.fmt.width.item('item'), scale: null };
+            if (ctx.meta.flow.widthCustomize) {
+                config.weight = { conv: ctx.fmt.flow.item('widthItem'), scale: null };
             }
             else {
-                const width = ctx.meta.width.item;
+                const width = ctx.meta.flow.widthItem;
                 config.weight = { conv: _ => width, scale: null };
             }
         }
@@ -286,7 +288,7 @@ export class Visual implements IVisual {
         /* #region  update bubble.for if null */
         copy(ctx.meta.bubble, config.bubble);
         if (config.bubble.for === null) {
-            config.bubble.for = ctx.meta.style.direction !== 'in' ? 'dest' : 'origin';
+            config.bubble.for = ctx.meta.flow.direction !== 'in' ? 'dest' : 'origin';
         }
         if (config.bubble.for === 'origin' || config.bubble.for === 'both') {
             config.bubble.out = ctx.key('Origin');
@@ -304,8 +306,8 @@ export class Visual implements IVisual {
             }
             const weights = groups.map(g => sum(g, i => config.weight.conv(i)));
             groups = sort(groups, (_, i) => weights[i]);
-            if (ctx.meta.style.limit < groups.length) {
-                groups = groups.slice(0, ctx.meta.style.limit);
+            if (ctx.meta.flow.limit < groups.length) {
+                groups = groups.slice(0, ctx.meta.flow.limit);
                 rows = [].concat(...groups);
             }
         }
@@ -340,7 +342,9 @@ export class Visual implements IVisual {
         config.injections = coords(ctx, 'Origin', 'OLati', 'OLong', coords(ctx, 'Dest', 'DLati', 'DLong', {}));
         copy(persist.manual.value({}), config.injections);
 
-        copy(ctx.meta.advance, config.advance);
+        config.advance.relocate = ctx.meta.map.relocate;
+        config.advance.located = ctx.meta.map.located;
+        config.advance.unlocated = ctx.meta.map.unlocated;
         config.groups = groups;
         return config;
     }
@@ -388,17 +392,19 @@ export class Visual implements IVisual {
                 app.repaint(config, 'map');
             }
             if (ctx.dirty()) {
-                if (fmt.style.dirty()) {
+                // Flow lines: type/grouping change → full reset; colour/width → repaint flows.
+                if (fmt.flow.dirty(['style', 'direction', 'limit'])) {
                     reset(config);
                 }
-                if (fmt.advance.dirty()) {
-                    if (fmt.advance.dirty('relocate') === 'off') {
+                else if (fmt.flow.dirty()) {
+                    app.repaint(config, 'flow');
+                }
+                // Map card also holds Relocate/Known/Unknown (the former Advanced object).
+                if (fmt.map.dirty(['relocate', 'located', 'unlocated'])) {
+                    if (fmt.map.dirty('relocate') === 'off') {
                         persist.manual.write(persist.manual.value() || {}, 10);
                     }
                     reset(config);
-                }
-                if (fmt.color.dirty() || fmt.width.dirty()) {
-                    app.repaint(config, 'flow');
                 }
                 if (fmt.bubble.dirty()) {
                     app.repaint(config, 'bubble');
@@ -409,7 +415,7 @@ export class Visual implements IVisual {
                 if (fmt.legend.dirty()) {
                     app.repaint(config, 'legend');
                 }
-                if (fmt.map.dirty()) {
+                if (fmt.map.dirty(['style', 'followTheme', 'pan', 'zoom', 'landDark', 'waterDark', 'landLight', 'waterLight', 'labelOpacity', 'autoFit'])) {
                     if (fmt.map.dirty(['style', 'followTheme', 'pan', 'zoom', 'landDark', 'waterDark', 'landLight', 'waterLight', 'labelOpacity'])) {
                         app.repaint(config, 'map');
                     }
@@ -424,51 +430,54 @@ export class Visual implements IVisual {
 
     public enumerateObjectInstances(options: EnumerateVisualObjectInstancesOptions): VisualObjectInstance[] {
         const oname = options.objectName as keyof Format, ctx = this._ctx, fmt = ctx.fmt, cfg = this._cfg;
-        if (ctx.meta.advance.relocate) {
-            if (oname !== 'advance') {
+        // Relocate mode collapses the pane to just the point-placement controls (Map card).
+        if (ctx.meta.map.relocate) {
+            if (oname !== 'map') {
                 return null;
             }
-            return fmt.advance.dumper().metas(['relocate', 'located', 'unlocated']).result;
+            return fmt.map.dumper().metas(['relocate', 'located', 'unlocated']).result;
         }
         switch (oname) {
-            case 'advance':
-                return fmt.advance.dumper().metas(['relocate']).result;
+            case 'map':
+                return fmt.map.dumper()
+                    .metas(['style', 'followTheme', 'autoFit', 'pan', 'zoom', 'landDark', 'waterDark', 'landLight', 'waterLight', 'labelOpacity', 'relocate'])
+                    .result;
             case 'legend':
                 return fmt.legend.dumper()
                     .metas(['show', 'position', 'fontSize'])
-                    .labels(fmt.color.binding('item'), 'color_label')
-                    .labels(fmt.width.binding('item'), 'width_label', d => d.metas(['width']))
+                    .labels(fmt.flow.binding('colorItem'), 'color_label')
+                    .labels(fmt.flow.binding('widthItem'), 'width_label', d => d.metas(['width']))
                     .result;
-            case 'style':
-                return fmt.style.dumper().metas(['style'], cfg)
-                    .metas(cfg.style === 'flow', ['direction', 'limit'])
-                    .result;
-            case 'color':
-                const color = fmt.color.dumper().metas(['item']);
-                if (!ctx.cat('color')) {
-                    return color.result;
+            case 'flow': {
+                const d = fmt.flow.dumper();
+                // style / grouping
+                d.metas(['style'], cfg).metas(cfg.style === 'flow', ['direction', 'limit']);
+                // color
+                d.metas(['colorItem']);
+                if (ctx.cat('color')) {
+                    if (ctx.type('color').numeric) {
+                        d.metas('colorCustomize', ['colorMin', 'colorMax']);
+                    }
+                    else {
+                        d.items('colorItem');
+                    }
                 }
-                else if (ctx.type('color').numeric) {
-                    return color.metas('customize', ['min', 'max']).result;
-                }
-                else {
-                    return color.items('item').result;
-                }
-            case 'width':
-                const width = fmt.width.dumper();
-                if (!ctx.cat('width') && cfg.style !== 'flow') {
-                    width.metas(['item']);
-                }
-                if (cfg.weight.scale === null) {//district
-                    width.metas(['item']).items('item');
+                // width
+                const w = cfg.weight as any;
+                const wpref = { widthScale: w.scale, widthUnit: w.unit, widthMin: w.min, widthMax: w.max };
+                if (cfg.weight.scale === null) {
+                    // Distinct/default width: one "Line width" box + per-item rows (items()
+                    // no-ops when there is no Width field). Covers the no-field case too.
+                    d.metas(['widthItem']).items('widthItem');
                 }
                 else if (cfg.weight.scale === 'none') {
-                    width.metas(['scale', 'unit'], cfg.weight);
+                    d.metas(['widthScale', 'widthUnit'], wpref);
                 }
                 else {
-                    width.metas(['scale', 'min', 'max'], cfg.weight);
+                    d.metas(['widthScale', 'widthMin', 'widthMax'], wpref);
                 }
-                return width.result;
+                return d.result;
+            }
             case 'valueFormat':
                 return fmt.valueFormat.dumper().metas(['sort', 'top'])
                     .add(numberObjects(ctx.meta.valueFormat, oname))
@@ -490,7 +499,9 @@ export class Visual implements IVisual {
                 }
                 return bubble.result;
             default:
-                return fmt[oname].dumper().default;
+                // Any object not handled above (e.g. the hidden "persist" storage object).
+                const mgr = (fmt as any)[oname];
+                return mgr ? mgr.dumper().default : null;
         }
     }
 }

@@ -152,8 +152,8 @@
         }
     ],
     "objects": {
-        "style": {
-            "displayName": "Visual style",
+        "flow": {
+            "displayName": "Flow lines",
             "properties": {
                 "style": {
                     "displayName": "Type",
@@ -179,6 +179,65 @@
                     "displayName": "> Limit",
                     "description": "Maximum number of flows displayed simultaneously",
                     "type": { "numeric": true }
+                },
+                "colorCustomize":{
+                    "displayName": "Color: specify individually",
+                    "type": { "bool": true}
+                },
+                "colorAutofill": {
+                    "displayName": "> Color (autofill)",
+                    "description": "Choose distinct colors if unspecified",
+                    "type": { "bool": true }
+                },
+                "colorItem":{
+                    "displayName": "Line color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "colorMin":{
+                    "displayName": "> Color min",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "colorMax":{
+                    "displayName": "> Color max",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "widthCustomize": {
+                    "displayName": "Width: specify individually",
+                    "type": { "bool": true }
+                },
+                "widthItem": {
+                    "displayName": "Line width",
+                    "type": { "numeric": true }
+                },
+                "widthScale": {
+                    "displayName": "Width scale",
+                    "description": "Scale for the width field",
+                    "type": {
+                        "enumeration": [
+                            {"displayName": "None", "value": "none"},
+                            {"displayName": "Log", "value": "log"},
+                            {"displayName": "Linear", "value": "linear"}
+                        ]
+                    }
+                },
+                "widthUnit":{
+                    "displayName": "> Unit",
+                    "description": "Unit width for all lines",
+                    "type": { "numeric": true }
+                },
+                "widthMax": {
+                    "displayName": "> Max",
+                    "description": "Maximum width for all lines",
+                    "type": { "numeric": true }
+                },
+                "widthMin": {
+                    "displayName": "> Min",
+                    "description": "Minimum width for all lines",
+                    "type": { "numeric": true }
+                },
+                "persist": {
+                    "displayName": "Flow Persist",
+                    "type": { "text": true}
                 }
             }
         },
@@ -232,83 +291,6 @@
                 },
                 "persist": {
                     "displayName": "Legend Persist",
-                    "type": { "text": true}
-                }
-            }
-        },
-        "color":{
-            "displayName": "Color",
-            "properties": {
-                "customize":{
-                    "displayName": "Specify individually",
-                    "type": { "bool": true}
-                },
-                "autofill": {
-                    "displayName": "> (Autofill)",
-                    "description": "Choose distinct colors if unspecified",
-                    "type": { "bool": true }
-                },
-                "item":{
-                    "displayName": "Default",
-                    "type": { "fill": { "solid": { "color": true } } }
-                },
-                "min":{
-                    "displayName": "Min",
-                    "type": { "fill": { "solid": { "color": true } } }
-                },
-                "max":{
-                    "displayName": "Max",
-                    "type": { "fill": { "solid": { "color": true } } }
-                },
-                "persist": {
-                    "displayName": "Color Persist",
-                    "type": { "text": true}
-                }
-            }
-        },
-        "width":{
-            "displayName": "Width",
-            "properties": {
-                "customize": {
-                    "displayName": "Specify individually",
-                    "type": {
-                        "bool": true
-                    }
-                },
-                "item": {
-                    "displayName": "Default",
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "scale": {
-                    "displayName": "Scale",
-                    "description": "Scale for the width field",
-                    "type": {
-                        "enumeration": [
-                            {"displayName": "None", "value": "none"},
-                            {"displayName": "Log", "value": "log"},
-                            {"displayName": "Linear", "value": "linear"}
-                        ]
-                    }
-                },
-                "unit":{
-                    "displayName": "> Unit",
-                    "description": "Unit width for all lines",
-                    "type": { "numeric": true }
-                },
-                "max": {
-                    "displayName": "> Max",
-                    "description": "Maximum width for all lines",
-                    "type": { "numeric": true }
-                },
-                "min": {
-                    "displayName": "> Min",
-                    "description": "Minimum width for all lines",
-                    "type": { "numeric": true }
-                },
-                "persist": {
-                    "displayName": "Width Persist",
                     "type": { "text": true}
                 }
             }
@@ -442,27 +424,10 @@
                 "waterDark": { "displayName": "Ocean color (dark)", "type": { "fill": { "solid": { "color": true } } } },
                 "landLight": { "displayName": "Land color (light)", "type": { "fill": { "solid": { "color": true } } } },
                 "waterLight": { "displayName": "Ocean color (light)", "type": { "fill": { "solid": { "color": true } } } },
-                "labelOpacity": { "displayName": "Map label opacity (%)", "type": { "numeric": true } }
-            }
-        },
-        "advance": {
-            "displayName": "Advanced",
-            "properties": {
-                "relocate":{
-                    "displayName": "Relocate",
-                    "description": "Drag/Drop to manually change geo-locations",
-                    "type": { "bool": true }
-                },
-                "located":{
-                    "displayName": "> Known",
-                    "description": "Addresses with geo-locations",
-                    "type": { "bool": true }
-                },
-                "unlocated":{
-                    "displayName": "> Unknown",
-                    "description": "Addresses without geo-locations",
-                    "type": { "bool": true }
-                }
+                "labelOpacity": { "displayName": "Map label opacity (%)", "type": { "numeric": true } },
+                "relocate": { "displayName": "Relocate points", "description": "Drag/drop to manually change geo-locations", "type": { "bool": true } },
+                "located": { "displayName": "> Show known", "description": "Points with geo-locations", "type": { "bool": true } },
+                "unlocated": { "displayName": "> Show unknown", "description": "Points without geo-locations", "type": { "bool": true } }
             }
         },
         "persist": {
@@ -473,10 +438,6 @@
                     "type": { "text": true }
                 },
                 "manual":{
-                    "displayName": "Persist coding",
-                    "type": { "text": true }
-                },
-                "geocoding":{
                     "displayName": "Persist coding",
                     "type": { "text": true }
                 },
