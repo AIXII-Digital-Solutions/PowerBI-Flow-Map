@@ -254,7 +254,7 @@ $RECYCLE.BIN/
 .tmp/
 .api/
 
-/PowerBI-RealTimePos-Map.iml
+/PowerBI-Flow-Map.iml
 /webpack.statistics.prod.html
 .misc/
 releases/
