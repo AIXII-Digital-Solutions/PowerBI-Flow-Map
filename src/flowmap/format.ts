@@ -13,6 +13,18 @@ export class Format {
         width_label: ''
     };
 
+    // "Group legend" card — the collapsible corner legend for the secondary (Color)
+    // grouping (ported from the reference visual). Separate from the old width/scale bar.
+    groupLegend = {
+        show: true,
+        position: 'topLeft' as 'topRight' | 'topLeft' | 'bottomRight' | 'bottomLeft',
+        orientation: 'vertical' as 'vertical' | 'horizontal',
+        expanded: false,
+        width: 130,
+        fontSize: 11,
+        title: ''
+    };
+
     // "Flow lines" card — merges the former Visual style + Color + Width objects.
     // color*/width* are prefixed so the two encodings can share one object (and one
     // per-item persist store) without property-name collisions.
@@ -21,9 +33,11 @@ export class Format {
         style: null as 'straight' | 'flow' | 'arc',//depends
         direction: 'out' as 'in' | 'out',
         limit: 5,
-        // color
+        animate: false,
+        // color — distinct palette colour per secondary group by default (autofill on);
+        // turn autofill off + set the default colour to make all group lines one colour.
         colorCustomize: true,
-        colorAutofill: false,
+        colorAutofill: true,
         colorItem: { solid: { color: '#01B8AA' } },
         colorMin: { solid: { color: '#99e3dd' } },
         colorMax: { solid: { color: '#015c55' } },
@@ -60,7 +74,8 @@ export class Format {
         for: null as 'none' | 'origin' | 'dest' | 'both',//depends
         slice: null as boolean,//depends
         bubbleColor: { solid: { color: '#888888' } },
-        scale: 25,
+        scaleOut: 25,
+        scaleIn: 15,
         label: 'none' as 'none' | 'all' | 'manual' | 'hide',
         labelOpacity: 50,
         labelColor: { solid: { color: '#888888' } }

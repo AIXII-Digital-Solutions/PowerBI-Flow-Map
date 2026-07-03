@@ -34,6 +34,13 @@ export class Category {
             .getSelector();
     }
 
+    /** Cross-filter selection id for a single row of this category. */
+    public id(row: number): powerbi.visuals.ISelectionId {
+        return this._host.createSelectionIdBuilder()
+            .withCategory(this.column as powerbi.DataViewCategoryColumn, row)
+            .createSelectionId();
+    }
+
     public distincts(rows?: number[]): number[] {
         if (this._distincts && !rows) {
             return this._distincts;

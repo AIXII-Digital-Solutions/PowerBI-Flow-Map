@@ -138,6 +138,10 @@ export class Controller {
   /** Set by the visual to persist the on-map style switch. */
   public onStyleChanged: (style: MapStyle) => void = null;
 
+  private _onBgClick: () => void = null;
+  /** Register a handler for clicks on the empty basemap (used to clear selection). */
+  public onBackgroundClick(cb: () => void): void { this._onBgClick = cb; }
+
   public get map(): IMapShim { return this._shim; }
   public get format() { return this._fmt; }
   public get svg() { return this._svgroot; }
@@ -357,6 +361,8 @@ export class Controller {
     map.on('zoomend', () => this._viewChange(true));
     map.on('viewreset', () => this._viewChange(false));
     map.on('resize', () => this._resize());
+    // Click on empty basemap (not on a flow/bubble, which stop propagation) → clear selection.
+    map.on('click', () => this._onBgClick && this._onBgClick());
 
     // Power BI resizes the container without a window resize event and the visual's
     // update() bails out early on resize, so drive Leaflet's invalidateSize ourselves.

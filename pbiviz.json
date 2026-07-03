@@ -4,7 +4,7 @@
         "displayName": "Flow Map",
         "guid": "flowMapAixiiCA14AAF3F1104BB9BBB7656B48BBC4D7",
         "visualClassName": "Visual",
-        "version": "0.0.0.3",
+        "version": "0.0.0.7",
         "description": "Flowmap is a diagram that visualizes the movement of objects from one location to another.",
         "supportUrl": "https://github.com/AIXII-Digital-Solutions/PowerBI-Flow-Map",
         "gitHubUrl": "https://github.com/AIXII-Digital-Solutions/PowerBI-Flow-Map"

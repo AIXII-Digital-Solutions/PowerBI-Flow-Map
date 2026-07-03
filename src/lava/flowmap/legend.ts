@@ -136,29 +136,8 @@ export class Legend {
             return;
         }
         if ('distinct' in color) {
-            const distinct = color.distinct;
-            const colors = {} as StringMap<DistinctColor>;
-            for (let color of keys(distinct)) {
-                colors[color] = { color, label: distinct[color] };
-            }
-            const pos = $state.config.legend.position === 'top' ? 'bottom' : 'top';
-            let groups = root.selectAll('g').data(values(colors)).enter().append('g');
-
-            let r = (+$state.config.legend.fontSize) * 0.7 / 2, y = this._textY(), bias = 0;
-            groups.append('circle')
-                .att.cx(r + 3).att.cy(y - r).att.r(r).att.stroke_width(1)
-                .att.fill(info => info.color).att.stroke(info => info.color);
-            groups.append('text').att.x(2 * r + 4).att.y(y)
-                .text(info => info.label).att.fill(null);
-
-            let centerY = pos === 'top' ? 2 : this._textY();
-            groups.each(function (info, i) {
-                const item = selex(this).att.translate(bias, 0);
-                const box = item.node<SVGGElement>().getBBox();
-                info.center = { x: bias + box.x + box.width / 2, y: centerY };
-                bias += box.x + box.width + 10;//10 is the gap between color items
-            });
-            this._colorWidth = bias;
+            // Distinct colour groups are shown by the new corner GroupLegend component.
+            return;
         }
         else {
             const { domain, range } = color;

@@ -113,9 +113,6 @@ class helper {
                     tcoord.x = tlon - slon - 360;
                 }
             }
-            if (!arc) {
-                debugger;
-            }
             var cnt = Math.max(Math.round(Math.abs(tcoord.x / 4)), 10);
             var coords = arc(scoord, tcoord, cnt);
             var sx = map20.x(0), sy = map20.y(scoord.y);

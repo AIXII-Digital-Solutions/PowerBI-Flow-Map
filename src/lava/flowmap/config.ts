@@ -40,7 +40,8 @@ export class Config {
         for: null as 'none' | 'origin' | 'dest' | 'both',//depends
         slice: null as boolean,//depends
         bubbleColor: { solid: { color: '#888888' } },
-        scale: 25,
+        scaleOut: 25,
+        scaleIn: 15,
         label: 'none' as 'none' | 'all' | 'manual' | 'hide',
         labelOpacity: 50,
         labelColor: { solid: { color: '#888888' } },

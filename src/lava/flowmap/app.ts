@@ -122,6 +122,12 @@ function queue(groups: number[][], then: Action) {
 }
 
 
+/** Dim flows + bubbles whose rows are not in `rows` (null/empty restores all to full). */
+export function highlight(rows: number[] | null) {
+  flows.highlight(rows);
+  pies.highlight(rows);
+}
+
 export function reset(cfg: Config, then?: Action) {
   $state.reset(cfg);
   $state.issues = {};
@@ -243,7 +249,6 @@ function resetWidth() {
     legend.rewidth({ invert, scale: $state.width, dmax });
   }
   else if ('unit' in weight) {
-    debugger;
     if (weight.unit === null) {
       weight.unit = dmin === dmax ? 3 / dmin : 25 / dmax;
     }

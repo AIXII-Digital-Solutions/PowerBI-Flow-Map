@@ -60,6 +60,12 @@ export class Pie {
                 }
             }
         }
+        // Arrival (in) bubbles get a small white centre dot so they read as distinct
+        // from the solid departure (out) bubbles — "similar but slightly different".
+        if (this.type === 'in') {
+            this.d3.append('circle').att.class('inner').att.fill('white')
+                .att.fill_opacity(0.9).att.stroke('none');
+        }
         this.d3.att.translate($state.mapctl.pixel($state.loc(this.addr)));
     }
 
@@ -71,6 +77,7 @@ export class Pie {
         radius = radius || this._radius;
         this.d3.selectAll('.slice').att.scale(radius);
         this.d3.selectAll('.mask').att.r(radius);
+        this.d3.selectAll('.inner').att.r(radius * 0.42);
         return this._radius = radius;
     }
 }
@@ -135,12 +142,30 @@ function build(groups: StringMap<number[]>, type: 'in' | 'out') {
 
 function resetRadius() {
     const width = $state.width;
-    const all = values(origins).concat(values(destins));
-    const factor = $state.config.bubble.scale / 10;
-    const radius = (w: number) => Math.sqrt(width(w)) * factor + 2;
-    for (let pie of all) {
-        pie.radius(radius(pie.total));
+    const outFactor = $state.config.bubble.scaleOut / 10;
+    const inFactor = $state.config.bubble.scaleIn / 10;
+    const radius = (w: number, factor: number) => Math.sqrt(width(w)) * factor + 2;
+    for (const pie of values(origins)) {
+        pie.radius(radius(pie.total, outFactor));
     }
+    for (const pie of values(destins)) {
+        pie.radius(radius(pie.total, inFactor));
+    }
+}
+
+/** Dim every bubble whose rows are not in `rows` (null/empty restores all). */
+export function highlight(rows: number[] | null) {
+    if (!root) {
+        return;
+    }
+    if (!rows || rows.length === 0) {
+        root.selectAll<Pie>('.pie').classed('dimmed', false).classed('selected', false);
+        return;
+    }
+    const set = new Set<number>(rows);
+    root.selectAll<Pie>('.pie')
+        .classed('dimmed', p => !p.rows.some(r => set.has(r)))
+        .classed('selected', p => p.rows.some(r => set.has(r)));
 }
 
 export function hover(addrs: string[]) {

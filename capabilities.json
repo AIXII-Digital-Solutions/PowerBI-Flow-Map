@@ -180,6 +180,11 @@
                     "description": "Maximum number of flows displayed simultaneously",
                     "type": { "numeric": true }
                 },
+                "animate": {
+                    "displayName": "Animate flow",
+                    "description": "Animated dashes flowing toward the destinations",
+                    "type": { "bool": true }
+                },
                 "colorCustomize":{
                     "displayName": "Color: specify individually",
                     "type": { "bool": true}
@@ -295,6 +300,26 @@
                 }
             }
         },
+        "groupLegend": {
+            "displayName": "Group legend",
+            "properties": {
+                "show": { "displayName": "Show", "type": { "bool": true } },
+                "position": { "displayName": "Position", "type": { "enumeration": [
+                    {"displayName": "Top right", "value": "topRight"},
+                    {"displayName": "Top left", "value": "topLeft"},
+                    {"displayName": "Bottom right", "value": "bottomRight"},
+                    {"displayName": "Bottom left", "value": "bottomLeft"}
+                ]}},
+                "orientation": { "displayName": "Orientation", "type": { "enumeration": [
+                    {"displayName": "Vertical", "value": "vertical"},
+                    {"displayName": "Horizontal (2 rows)", "value": "horizontal"}
+                ]}},
+                "expanded": { "displayName": "Expanded by default", "type": { "bool": true } },
+                "width": { "displayName": "Width (px)", "type": { "numeric": true } },
+                "fontSize": { "displayName": "Text size", "type": { "formatting": { "fontSize": true } } },
+                "title": { "displayName": "Title", "type": { "text": true } }
+            }
+        },
         "bubble":{
             "displayName": "Bubble",
             "properties": {
@@ -317,8 +342,14 @@
                     "displayName": "> Color",
                     "type": { "fill": { "solid": { "color": true } } }
                 },
-                "scale": {
-                    "displayName": "Scale",
+                "scaleOut": {
+                    "displayName": "Departure size",
+                    "description": "Size coefficient for origin (departure) bubbles",
+                    "type": { "formatting": { "fontSize": true } }
+                },
+                "scaleIn": {
+                    "displayName": "Arrival size",
+                    "description": "Size coefficient for destination (arrival) bubbles",
                     "type": { "formatting": { "fontSize": true } }
                 },
                 "label": {

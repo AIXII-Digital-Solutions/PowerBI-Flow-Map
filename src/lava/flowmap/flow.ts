@@ -41,6 +41,14 @@ class VisualFlow {
         this._tRoot.remove();
     }
 
+    dim(d: boolean) {
+        this._tRoot.classed('dimmed', d);
+    }
+
+    select(s: boolean) {
+        this._tRoot.classed('selected', s);
+    }
+
     public reformat(recolor: boolean, rewidth: boolean) {
         if (recolor) {
             const paths = this._sRoot.selectAll<IPath>('.base');
@@ -177,5 +185,22 @@ export function reweight(weight: Func<number, number>): number[] {
 export function reformat(recolor: boolean, rewidth: boolean) {
     for (let f of flows) {
         f.reformat(recolor, rewidth);
+    }
+}
+
+/** Dim every flow whose rows are not in `rows` (null/empty restores all to full opacity). */
+export function highlight(rows: number[] | null) {
+    if (!rows || rows.length === 0) {
+        for (const v of flows) {
+            v.dim(false);
+            v.select(false);
+        }
+        return;
+    }
+    const set = new Set<number>(rows);
+    for (const v of flows) {
+        const hit = v.rows.some(r => set.has(r));
+        v.dim(!hit);
+        v.select(hit);
     }
 }

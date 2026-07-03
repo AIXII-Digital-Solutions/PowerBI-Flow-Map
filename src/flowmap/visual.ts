@@ -16,6 +16,8 @@ import { selex } from "../lava/d3";
 import { MapFormat, ILocation, MapStyle } from "../lava/map";
 import * as app from '../lava/flowmap/app';
 import { keys, sum } from "d3";
+import { event as d3event } from 'd3-selection';
+import { GroupLegend } from './grouplegend';
 
 type Role = 'Origin' | 'Dest' | 'width' | 'color' | 'OLati' | 'OLong' | 'DLati' | 'DLong' | 'OName' | 'DName' | 'Tooltip' | 'Label';
 type Read<T> = Func<number, T>;
@@ -44,19 +46,35 @@ class helper {
         return result;
     }
 
+    /** Flight count for a set of rows: sum of the Width field when it is a numeric
+     * measure (Width = number of flights), otherwise the number of records. */
+    private static _count(ctx: Ctx, rows: number[]): string {
+        let n: number;
+        if (ctx.cat('width') && ctx.type('width').numeric) {
+            const vals = ctx.nums('width');
+            n = rows.reduce((s, r) => s + (+vals[r] || 0), 0);
+        }
+        else {
+            n = rows.length;
+        }
+        return numberFormat(ctx.meta.valueFormat)(n);
+    }
+
     public static pieTooltip(rows: number[], type: 'in' | 'out', ctx: Ctx): VisualTooltipDataItem[] {
         const src = ctx.cat('OName') ? ctx.key('OName') : ctx.key('Origin');
         const tar = ctx.cat('DName') ? ctx.key('DName') : ctx.key('Dest');
         const [header, name] = type === 'out' ? [src(rows[0]), tar] : [tar(rows[0]), src];
+        // Header = this location; then how many flights depart from / arrive at it.
+        const count = tooltip.item(helper._count(ctx, rows), type === 'out' ? 'Departures' : 'Arrivals', header);
         if (!ctx.cat('Tooltip')) {
-            return [tooltip.item(header)];
+            return [count];
         }
         const items = helper._items(ctx), names = ctx.columns('Tooltip').map(c => c.source.displayName);
         if (rows.length === 1) {
-            return items(rows[0]).map((v, i) => tooltip.item(v, names[i], header));
+            return [count].concat(items(rows[0]).map((v, i) => tooltip.item(v, names[i], header)));
         }
         else {
-            return helper._tips(ctx, rows, name, header, items);
+            return [count].concat(helper._tips(ctx, rows, name, header, items));
         }
     }
 
@@ -76,24 +94,41 @@ class helper {
         return +top >= rows.length ? rows : rows.slice(0, +top);
     }
 
+    private static _uniq(arr: string[]): string[] {
+        const seen = {} as StringMap<boolean>, out = [] as string[];
+        for (const v of arr) {
+            if (!seen[v]) { seen[v] = true; out.push(v); }
+        }
+        return out;
+    }
+
     public static pathTooltip(ctx: Ctx, rows: number[], type: 'in' | 'out'): VisualTooltipDataItem[] {
         const src = ctx.cat('OName') ? ctx.key('OName') : ctx.key('Origin');
         const tar = ctx.cat('DName') ? ctx.key('DName') : ctx.key('Dest');
+        // A bundled "flow" trunk edge fans out to many rows, so name the endpoints by how
+        // many distinct origins / destinations they cover — not just the first row's pair.
+        const srcs = helper._uniq(rows.map(src)), tars = helper._uniq(rows.map(tar));
+        const sPart = srcs.length === 1 ? srcs[0] : srcs.length + ' origins';
+        const tPart = tars.length === 1 ? tars[0] : tars.length + ' destinations';
+        const header = sPart + ' → ' + tPart;
+        const count = tooltip.item(helper._count(ctx, rows), 'Flights', header);
         if (!ctx.cat('Tooltip')) {
-            if (type === 'out') {
-                return [tooltip.item(src(rows[0]), 'From'), tooltip.item(rows.map(tar).join(', '), 'To')];
+            const result = [count];
+            if (type === 'out' && tars.length > 1) {
+                result.push(tooltip.item(tars.join(', '), 'To', header));
             }
-            else {
-                return [tooltip.item(tar(rows[0]), 'To'), tooltip.item(rows.map(src).join(', '), 'From')];
+            else if (type === 'in' && srcs.length > 1) {
+                result.push(tooltip.item(srcs.join(', '), 'From', header));
             }
+            return result;
         }
         const items = helper._items(ctx), names = ctx.columns('Tooltip').map(c => c.source.displayName);
         if (rows.length === 1) {
-            return items(rows[0]).map((v, i) => tooltip.item(v, names[i], src(rows[0]) + ' → ' + tar(rows[0])));
+            return [count].concat(items(rows[0]).map((v, i) => tooltip.item(v, names[i], header)));
         }
         else {
-            const [header, name] = type === 'out' ? ['(From) ' + src(rows[0]), tar] : ['(To) ' + tar(rows[0]), src];
-            return helper._tips(ctx, rows, name, header, items);
+            const name = type === 'out' ? tar : src;
+            return [count].concat(helper._tips(ctx, rows, name, header, items));
         }
     }
 }
@@ -101,12 +136,21 @@ export class Visual implements IVisual {
     private _target: HTMLElement;
     private _ctx = null as Ctx;
     private _cfg = null as app.Config;
+    private _selectionManager: powerbi.extensibility.ISelectionManager;
+    private _selRows: number[] | null = null;
+    private _suppressClear = false;
+    private _groupLegend: GroupLegend;
+    private _selGroups = new Set<string>();
     constructor(options: VisualConstructorOptions) {
         if (!options) {
             return;
         }
         selex(this._target = options.element).sty.cursor('default');
+        this._target.style.position = this._target.style.position || 'relative';
         tooltip.init(options);
+        this._selectionManager = options.host.createSelectionManager();
+        this._groupLegend = new GroupLegend(this._target);
+        this._groupLegend.onSelect = (key, e) => this._onLegendClick(key, e);
         const ctx = this._ctx = new Context(options.host, new Format());
         ctx.fmt.flow.bind('width', "widthItem", "widthCustomize");
         ctx.fmt.flow.bind("color", "colorItem", 'colorCustomize', 'colorAutofill', k => <Fill>{ solid: { color: ctx.palette(k) } });
@@ -114,6 +158,7 @@ export class Visual implements IVisual {
         ctx.fmt.legend.bind('color', 'color_label', 'color', 'color_default', '');
         app.events.flow.pathInited = group => {
             tooltip.add(group, arg => helper.pathTooltip(this._ctx, arg.data.leafs as number[], ctx.meta.flow.direction));
+            group.on('click', (p: any) => this._onMarkClick(p.leafs as number[]));
         };
         app.events.popup.onChanged = addrs => persist.banner.write(addrs, 10);
         app.events.pin.onDrag = (addr, loc) => {
@@ -121,7 +166,124 @@ export class Visual implements IVisual {
         };
         app.events.pie.onPieCreated = group => {
             tooltip.add(group, arg => helper.pieTooltip(arg.data.rows, arg.data.type, this._ctx));
+            group.on('click', (p: any) => this._onMarkClick(p.rows as number[]));
         };
+    }
+
+    /** Click on a flow/bubble → cross-filter its rows and dim the rest (Ctrl/Shift = add). */
+    private _onMarkClick(rows: number[]): void {
+        const e = d3event as MouseEvent;
+        if (e && e.stopPropagation) {
+            e.stopPropagation();
+        }
+        // A flow/bubble click is not a group selection — drop any legend group highlight.
+        this._selGroups = new Set<string>();
+        this._groupLegend && this._groupLegend.refreshSelected(this._selGroups);
+        // The paired basemap 'click' fires right after — suppress it so it doesn't clear.
+        this._suppressClear = true;
+        window.setTimeout(() => { this._suppressClear = false; }, 60);
+        const multi = !!(e && (e.ctrlKey || e.metaKey || e.shiftKey));
+        this._selRows = (multi && this._selRows) ? this._selRows.concat(rows) : rows.slice();
+        app.highlight(this._selRows);
+        this._selectionManager.select(this._rowIds(this._selRows), false);
+    }
+
+    private _clearSelection(): void {
+        if (this._suppressClear) {
+            return;
+        }
+        this._selRows = null;
+        this._selGroups = new Set<string>();
+        this._groupLegend && this._groupLegend.refreshSelected(this._selGroups);
+        app.highlight(null);
+        this._selectionManager.clear();
+    }
+
+    /** Toggle the "flying dashes" flow animation from the Flow lines → Animate flow setting. */
+    private _applyAnimate(): void {
+        const on = !!this._ctx.config('flow', 'animate');
+        this._target && this._target.classList.toggle('flowmap-animated', on);
+    }
+
+    /** Rebuild the corner group legend from the current secondary (Color) grouping. */
+    private _updateLegend(): void {
+        if (!this._groupLegend) {
+            return;
+        }
+        this._applyAnimate();
+        const ctx = this._ctx;
+        const opts = {
+            show: ctx.config('groupLegend', 'show'),
+            position: ctx.config('groupLegend', 'position') as any,
+            orientation: ctx.config('groupLegend', 'orientation') as any,
+            expanded: ctx.config('groupLegend', 'expanded'),
+            width: +ctx.config('groupLegend', 'width'),
+            fontSize: +ctx.config('groupLegend', 'fontSize'),
+            title: ctx.config('groupLegend', 'title')
+        };
+        const cat = ctx.cat('color');
+        if (!cat || ctx.type('color').numeric || !ctx.meta.flow.colorCustomize) {
+            this._groupLegend.update([], opts, new Set<string>());
+            return;
+        }
+        const colorFn = ctx.fmt.flow.item('colorItem');
+        const rows = cat.distincts();
+        const labels = cat.row2label(rows);
+        const groups = rows.map(r => ({ key: cat.key(r), color: colorFn(r) + '', label: (labels[r] || '') + '' }));
+        this._groupLegend.update(groups, opts, this._selGroups);
+    }
+
+    /** Click a legend row → cross-filter that group (plain / Ctrl toggle / re-click clears). */
+    private _onLegendClick(key: string, e: MouseEvent): void {
+        // Legend rows stopPropagation and live outside the Leaflet container, so no
+        // basemap 'click' follows — do NOT set _suppressClear here (it would neuter the
+        // plain re-click-to-clear path, which routes through _clearSelection).
+        const ctx = this._ctx, cat = ctx.cat('color');
+        if (!cat) {
+            return;
+        }
+        const multi = !!(e && (e.ctrlKey || e.metaKey || e.shiftKey));
+        if (multi) {
+            this._selGroups.has(key) ? this._selGroups.delete(key) : this._selGroups.add(key);
+        }
+        else {
+            if (this._selGroups.size === 1 && this._selGroups.has(key)) {
+                this._clearSelection();
+                return;
+            }
+            this._selGroups = new Set<string>([key]);
+        }
+        const groups = this._selGroups;
+        const rows = ctx.rows().filter(r => groups.has(cat.key(r)));
+        this._selRows = rows;
+        app.highlight(rows);
+        this._selectionManager.select(this._rowIds(rows), false);
+        this._groupLegend.refreshSelected(groups);
+    }
+
+    /** Composite (Origin, Dest) selection id for a row — filters that exact O→D pair. */
+    private _rowId(row: number): powerbi.visuals.ISelectionId {
+        const ctx = this._ctx;
+        let b = ctx.host.createSelectionIdBuilder();
+        const o = ctx.cat('Origin'), d = ctx.cat('Dest');
+        if (o && o.column) { b = b.withCategory(o.column as any, row); }
+        if (d && d.column) { b = b.withCategory(d.column as any, row); }
+        return b.createSelectionId();
+    }
+
+    private _rowIds(rows: number[]): powerbi.visuals.ISelectionId[] {
+        const ctx = this._ctx;
+        const ok = ctx.cat('Origin') ? ctx.cat('Origin').key : (_: number) => '';
+        const dk = ctx.cat('Dest') ? ctx.cat('Dest').key : (_: number) => '';
+        const seen = {} as StringMap<boolean>;
+        const ids = [] as powerbi.visuals.ISelectionId[];
+        for (const r of rows) {
+            const k = ok(r) + '' + dk(r);
+            if (seen[k]) { continue; }
+            seen[k] = true;
+            ids.push(this._rowId(r));
+        }
+        return ids;
     }
 
     private _buildLegendLabels(role: 'color' | 'width'): StringMap<string> {
@@ -367,6 +529,7 @@ export class Visual implements IVisual {
             const mapFmt = this._mapFormat();
             app.init(this._target, mapFmt, persist.banner.value() || [], ctl => {
                 ctl.onStyleChanged = style => this._ctx.persist('map', 'style', style);
+                ctl.onBackgroundClick(() => this._clearSelection());
                 const [center, zoom] = persist.map.value() || [null, null];
                 center && ctl.setCenterZoom(center, zoom);
                 ctl.add({ transform: (c, p, e) => e && persist.map.write([c.map.getCenter(), c.map.getZoom()], 400) });
@@ -377,6 +540,7 @@ export class Visual implements IVisual {
                 else {
                     reset(this._cfg = this._config());
                 }
+                this._updateLegend();
             });
             this._inited = true;
         }
@@ -425,6 +589,7 @@ export class Visual implements IVisual {
             else {
                 reset(config);
             }
+            this._updateLegend();
         }
     }
 
@@ -452,6 +617,7 @@ export class Visual implements IVisual {
                 const d = fmt.flow.dumper();
                 // style / grouping
                 d.metas(['style'], cfg).metas(cfg.style === 'flow', ['direction', 'limit']);
+                d.metas(['animate']);
                 // color
                 d.metas(['colorItem']);
                 if (ctx.cat('color')) {
@@ -485,7 +651,7 @@ export class Visual implements IVisual {
             case 'bubble':
                 const bubble = fmt.bubble.dumper().metas(['for'], cfg.bubble);
                 if (ctx.meta.bubble.for !== 'none') {
-                    bubble.metas(['scale', 'slice'], cfg.bubble);
+                    bubble.metas(['scaleOut', 'scaleIn', 'slice'], cfg.bubble);
                     if (!cfg.bubble.slice) {
                         bubble.metas(['bubbleColor']);
                     }
