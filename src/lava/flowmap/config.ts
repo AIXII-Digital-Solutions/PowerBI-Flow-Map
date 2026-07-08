@@ -10,7 +10,15 @@ export class Config {
         located: true,
         unlocated: true
     };
-    style = null as 'straight' | 'flow' | 'arc';
+    style = null as 'straight' | 'flow' | 'arc' | 'bundle';
+    bundleBySource = false;
+    // "Corridors" mean-attraction edge-bundling parameters (see lava/flowmap/bundle.ts),
+    // filled from the Bundle strength / Merge cone / Merge radius settings.
+    bundle = {
+        compatibility: 0.6, K: 0.5, cycles: 5, iterations: 90, step: 0.5,
+        maxSubdivision: 37, maxNeighbors: 60, cone: 40 * Math.PI / 180,
+        proximity: 70, pointRadius: 60, maxOffsetFrac: 0.34, splitColor: false
+    };
     source = null as Func;
     target = null as Func;
     groups = null as number[][];

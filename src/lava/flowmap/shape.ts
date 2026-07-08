@@ -1,6 +1,7 @@
 import { ILocation, IBound, Converter, IMapShim } from '../map';
 import { Func, StringMap, values } from '../type';
 import { Key, IPathPoint, IPoint, ILayout, IPath, layout } from './algo';
+import { bundle as fdeb, BEdge } from './bundle';
 import { extent } from 'd3-array';
 import { arc } from './arc';
 import { ISelex } from '../d3';
@@ -52,9 +53,16 @@ class LinePath implements IPath {
 class helper {
     public static initPaths(root: ISelex, shape: IShape) {
         let conv = pointConverter(null);
+        const data = shape.paths();
         root.selectAll('*').remove();
-        root.selectAll('.base').data(shape.paths()).enter().append('path');
-        root.selectAll('path').att.class('base flow').att.d(p => p.d(conv))
+        // Wide, invisible "hit" path under each visible one so thin lines are easy to
+        // hover/click. Cheap on pan (the whole group is translated, not each path); the
+        // extra d update only happens on zoom.
+        root.selectAll('.hit').data(data).enter().append('path')
+            .att.class('hit flow').att.d(p => p.d(conv))
+            .att.fill('none').att.stroke('#fff').att.stroke_opacity(0).att.stroke_linecap('round');
+        root.selectAll('.base').data(data).enter().append('path')
+            .att.class('base flow').att.d(p => p.d(conv))
             .att.stroke_linecap('round').att.fill('none');
     }
 
@@ -140,6 +148,34 @@ class helper {
         bound.margin.south = slat - minlat;
         return { paths, bound };
     }
+
+    /** Force-directed edge bundling: build one polyline LinePath per (src→tar) edge. */
+    public static bundle(srcLocs: ILocation[], tarLocs: ILocation[], trows: number[], weis: number[], opts: any) {
+        const idx = [] as number[];
+        for (let i = 0; i < trows.length; i++) {
+            if (srcLocs[i] && tarLocs[i]) idx.push(i);
+        }
+        const all = [] as ILocation[];
+        for (const i of idx) { all.push(srcLocs[i]); all.push(tarLocs[i]); }
+        const bound = map20.points(all);
+        const pts = bound.points;
+        const edges = [] as BEdge[];
+        for (let k = 0; k < idx.length; k++) {
+            const s = pts[2 * k], t = pts[2 * k + 1];
+            edges.push({ x0: s.x, y0: s.y, x1: t.x, y1: t.y });
+        }
+        const routed = fdeb(edges, opts);
+        const paths = {} as StringMap<LinePath>;
+        for (let k = 0; k < idx.length; k++) {
+            const poly = routed[k], row = trows[idx[k]];
+            let str = 'M ' + Math.round(poly[0].x) + ' ' + Math.round(poly[0].y);
+            for (let m = 1; m < poly.length; m++) {
+                str += ' L ' + Math.round(poly[m].x) + ' ' + Math.round(poly[m].y);
+            }
+            paths[row] = new LinePath(str, row, weis[idx[k]]);
+        }
+        return { paths, bound };
+    }
 }
 
 export interface IShape {
@@ -162,6 +198,22 @@ export function build(type: 'straight' | 'flow' | 'arc', d3: ISelex, src: ILocat
             const line = helper.line(src, tars, trows, weis);
             return new LineShape(d3, src, line.paths, line.bound);
     }
+}
+
+/** Build a globally edge-bundled ("Corridors") shape from a set of rows (each = one edge). */
+export function buildBundle(d3: ISelex, rows: number[]): IShape {
+    const cfg = $state.config;
+    const srcLocs = rows.map(r => $state.loc(cfg.source(r)));
+    const tarLocs = rows.map(r => $state.loc(cfg.target(r)));
+    const weis = rows.map(r => Math.max(cfg.weight.conv(r), 0));
+    const b = cfg.bundle;
+    const opts = {
+        compatibility: b.compatibility, K: b.K, cycles: b.cycles, iterations: b.iterations,
+        step: b.step, maxSubdivision: b.maxSubdivision, maxNeighbors: b.maxNeighbors,
+        cone: b.cone, proximity: b.proximity, pointRadius: b.pointRadius, maxOffsetFrac: b.maxOffsetFrac,
+    };
+    const { paths, bound } = helper.bundle(srcLocs, tarLocs, rows, weis, opts);
+    return new LineShape(d3, bound.anchor, paths, bound);
 }
 
 class FlowShape implements IShape {
@@ -197,9 +249,14 @@ class FlowShape implements IShape {
 
     rewidth() {
         const conv = pointConverter(null);
-        this.d3.selectAll<IPath>('path')
-            .att.stroke_width(p => p.width($state.width))
-            .att.d(p => p.d(conv));
+        // ORDER MATTERS: width() sets each path's sideways taper offset (offset[2] =
+        // parentWidth/2 - selfWidth/2); d() then READS that offset to spread the curve so a
+        // trunk tapers into its branches. The original runs width-before-d; reversing it (as
+        // this fork briefly did for the .hit split) drew every curve with offset 0 → thin
+        // centred lines with no trunk taper. Width on .base sets the shared path objects'
+        // offset; d on all paths (.base + .hit share the same data) reads it.
+        this.d3.selectAll<IPath>('.base').att.stroke_width(p => p.width($state.width));
+        this.d3.selectAll<IPath>('path').att.d(p => p.d(conv));
     }
 
     transform(map: IMapShim, pzoom: number) {
@@ -237,7 +294,7 @@ class LineShape implements IShape {
         const factor = map20.factor($state.mapctl.map.getZoom());
         const width = (v: number) => $state.width(v) / factor;
         this.d3.att.scale(factor);
-        this.d3.selectAll<IPath>('path').att.stroke_width(p => p.width(width));
+        this.d3.selectAll<IPath>('.base').att.stroke_width(p => p.width(width));
     }
 
     transform(map: IMapShim, pzoom: number) {

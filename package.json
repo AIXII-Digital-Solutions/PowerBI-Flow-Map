@@ -1,6 +1,6 @@
 {
   "name": "visual",
-  "version": "0.0.0.7",
+  "version": "1.0.0.0",
   "description": "Flowmap is a diagram that visualizes the movement of objects from one location to another.",
   "scripts": {
     "pbiviz": "pbiviz",

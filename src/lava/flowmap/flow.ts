@@ -1,6 +1,6 @@
 import { Func } from '../type';
 import { $state } from './app';
-import { IShape, build } from './shape';
+import { IShape, build, buildBundle } from './shape';
 import { IPath } from './algo';
 import { ISelex } from '../d3';
 import { IListener, IBound, ILocation, IMapShim } from '../map';
@@ -53,8 +53,15 @@ class VisualFlow {
         if (recolor) {
             const paths = this._sRoot.selectAll<IPath>('.base');
             if ($state.config.style === 'flow') {
-                const color = $state.color(this.rows[0]);
-                paths.att.stroke(color);
+                if ($state.config.bundleBySource) {
+                    // All routes from this source share trunks; colour each edge by a
+                    // representative leaf row so branches keep their group colour.
+                    paths.att.stroke(p => $state.color(+p.leafs[0]));
+                }
+                else {
+                    const color = $state.color(this.rows[0]);
+                    paths.att.stroke(color);
+                }
             }
             else {
                 paths.att.stroke(p => $state.color(+p.id));
@@ -129,10 +136,13 @@ class VisualFlow {
     }
 
     private _build() {
+        if ($state.config.style === 'bundle') {
+            return buildBundle(this._sRoot, this.rows);
+        }
         const source = $state.loc($state.config.source(this.rows[0]));
         const weights = this.rows.map(r => Math.max($state.config.weight.conv(r), 0));
         const targets = this.rows.map(r => $state.loc($state.config.target(r)));
-        return build($state.config.style, this._sRoot, source, targets, this.rows, weights);
+        return build($state.config.style as 'straight' | 'flow' | 'arc', this._sRoot, source, targets, this.rows, weights);
     }
 }
 

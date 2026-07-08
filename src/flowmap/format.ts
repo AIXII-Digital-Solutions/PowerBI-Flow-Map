@@ -30,17 +30,37 @@ export class Format {
     // per-item persist store) without property-name collisions.
     flow = {
         // style
-        style: null as 'straight' | 'flow' | 'arc',//depends
+        // Default to the bundled spider ("flow") so routes merge into shared trunks and
+        // branch out — the route-map look. Users can switch to straight / great-circle.
+        style: 'flow' as 'straight' | 'flow' | 'arc' | 'bundle',
         direction: 'out' as 'in' | 'out',
-        limit: 5,
+        // Bundle by source ON by default: group every route from a hub into shared trunks
+        // regardless of the Color field (otherwise a high-cardinality Color splits each hub
+        // into single-route spiders → radial). Branches stay individually coloured.
+        limit: 10,
+        bundleBySource: true,
+        // 50 → 18° spiral angle = the original Weiwei Cui flowmap default (see visual.ts).
+        bundleStrength: 50,
+        // "Corridors" merge cone (degrees): routes whose directions differ by less than this
+        // fuse into shared corridors; smaller = only near-parallel routes merge.
+        bundleCone: 40,
+        // "Corridors" merge radius (% of the view): two routes fuse only if they pass this close
+        // to each other — the "only merge lines near each other" control.
+        bundleRadius: 7,
+        // "Corridors" (edge-bundling) only: when ON and a Color field is present, bundle each
+        // colour separately instead of merging all routes into shared corridors.
+        bundleSplitColor: false,
         animate: false,
         // color — distinct palette colour per secondary group by default (autofill on);
         // turn autofill off + set the default colour to make all group lines one colour.
         colorCustomize: true,
         colorAutofill: true,
-        colorItem: { solid: { color: '#01B8AA' } },
-        colorMin: { solid: { color: '#99e3dd' } },
-        colorMax: { solid: { color: '#015c55' } },
+        // AIXII brand palette defaults (matches AI-XII_PowerBI_Theme_Light.json). With a Color
+        // field + autofill the per-group colours come from the report theme's dataColors via
+        // host.colorPalette; these apply when there's no Color field / for the numeric gradient.
+        colorItem: { solid: { color: '#D40000' } },
+        colorMin: { solid: { color: '#EA8080' } },
+        colorMax: { solid: { color: '#9F0000' } },
         // width
         widthCustomize: true,
         widthItem: 2,

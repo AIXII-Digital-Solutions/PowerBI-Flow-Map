@@ -18,6 +18,8 @@ import * as app from '../lava/flowmap/app';
 import { keys, sum } from "d3";
 import { event as d3event } from 'd3-selection';
 import { GroupLegend } from './grouplegend';
+import { CustomTooltip } from './customtooltip';
+import { setBundleAlpha } from '../lava/flowmap/algo';
 
 type Role = 'Origin' | 'Dest' | 'width' | 'color' | 'OLati' | 'OLong' | 'DLati' | 'DLong' | 'OName' | 'DName' | 'Tooltip' | 'Label';
 type Read<T> = Func<number, T>;
@@ -60,16 +62,37 @@ class helper {
         return numberFormat(ctx.meta.valueFormat)(n);
     }
 
+    /** Friendly row name: the OName/DName field when present & non-null, else the raw
+     * Origin/Dest value (so the header never shows "→ null" for blank name columns). */
+    private static _name(ctx: Ctx, nameRole: Role, baseRole: Role): Read<string> {
+        const nameFn = ctx.cat(nameRole) ? ctx.key(nameRole) : null;
+        const baseFn = ctx.key(baseRole);
+        return r => {
+            if (nameFn) {
+                const v = nameFn(r);
+                if (v !== null && v !== undefined && v !== '' && v !== 'null') { return v; }
+            }
+            return baseFn(r);
+        };
+    }
+
+    /** Tooltip label: drop Power BI's aggregation prefix ("First Master Series" →
+     * "Master Series") and append a colon. */
+    private static _label(name: string): string {
+        const clean = (name || '').replace(/^(First|Last|Count|Sum|Average|Avg|Min|Max|Median|Variance|Standard deviation)( of)?\s+/i, '').trim();
+        return (clean || name || '') + ':';
+    }
+
     public static pieTooltip(rows: number[], type: 'in' | 'out', ctx: Ctx): VisualTooltipDataItem[] {
-        const src = ctx.cat('OName') ? ctx.key('OName') : ctx.key('Origin');
-        const tar = ctx.cat('DName') ? ctx.key('DName') : ctx.key('Dest');
+        const src = helper._name(ctx, 'OName', 'Origin');
+        const tar = helper._name(ctx, 'DName', 'Dest');
         const [header, name] = type === 'out' ? [src(rows[0]), tar] : [tar(rows[0]), src];
         // Header = this location; then how many flights depart from / arrive at it.
-        const count = tooltip.item(helper._count(ctx, rows), type === 'out' ? 'Departures' : 'Arrivals', header);
+        const count = tooltip.item(helper._count(ctx, rows), type === 'out' ? 'Departures:' : 'Arrivals:', header);
         if (!ctx.cat('Tooltip')) {
             return [count];
         }
-        const items = helper._items(ctx), names = ctx.columns('Tooltip').map(c => c.source.displayName);
+        const items = helper._items(ctx), names = ctx.columns('Tooltip').map(c => helper._label(c.source.displayName));
         if (rows.length === 1) {
             return [count].concat(items(rows[0]).map((v, i) => tooltip.item(v, names[i], header)));
         }
@@ -103,26 +126,26 @@ class helper {
     }
 
     public static pathTooltip(ctx: Ctx, rows: number[], type: 'in' | 'out'): VisualTooltipDataItem[] {
-        const src = ctx.cat('OName') ? ctx.key('OName') : ctx.key('Origin');
-        const tar = ctx.cat('DName') ? ctx.key('DName') : ctx.key('Dest');
+        const src = helper._name(ctx, 'OName', 'Origin');
+        const tar = helper._name(ctx, 'DName', 'Dest');
         // A bundled "flow" trunk edge fans out to many rows, so name the endpoints by how
         // many distinct origins / destinations they cover — not just the first row's pair.
         const srcs = helper._uniq(rows.map(src)), tars = helper._uniq(rows.map(tar));
         const sPart = srcs.length === 1 ? srcs[0] : srcs.length + ' origins';
         const tPart = tars.length === 1 ? tars[0] : tars.length + ' destinations';
         const header = sPart + ' → ' + tPart;
-        const count = tooltip.item(helper._count(ctx, rows), 'Flights', header);
+        const count = tooltip.item(helper._count(ctx, rows), 'Flights:', header);
         if (!ctx.cat('Tooltip')) {
             const result = [count];
             if (type === 'out' && tars.length > 1) {
-                result.push(tooltip.item(tars.join(', '), 'To', header));
+                result.push(tooltip.item(tars.join(', '), 'To:', header));
             }
             else if (type === 'in' && srcs.length > 1) {
-                result.push(tooltip.item(srcs.join(', '), 'From', header));
+                result.push(tooltip.item(srcs.join(', '), 'From:', header));
             }
             return result;
         }
-        const items = helper._items(ctx), names = ctx.columns('Tooltip').map(c => c.source.displayName);
+        const items = helper._items(ctx), names = ctx.columns('Tooltip').map(c => helper._label(c.source.displayName));
         if (rows.length === 1) {
             return [count].concat(items(rows[0]).map((v, i) => tooltip.item(v, names[i], header)));
         }
@@ -140,6 +163,7 @@ export class Visual implements IVisual {
     private _selRows: number[] | null = null;
     private _suppressClear = false;
     private _groupLegend: GroupLegend;
+    private _tip: CustomTooltip;
     private _selGroups = new Set<string>();
     constructor(options: VisualConstructorOptions) {
         if (!options) {
@@ -151,22 +175,27 @@ export class Visual implements IVisual {
         this._selectionManager = options.host.createSelectionManager();
         this._groupLegend = new GroupLegend(this._target);
         this._groupLegend.onSelect = (key, e) => this._onLegendClick(key, e);
+        this._tip = new CustomTooltip(this._target);
         const ctx = this._ctx = new Context(options.host, new Format());
         ctx.fmt.flow.bind('width', "widthItem", "widthCustomize");
         ctx.fmt.flow.bind("color", "colorItem", 'colorCustomize', 'colorAutofill', k => <Fill>{ solid: { color: ctx.palette(k) } });
         ctx.fmt.legend.bind('width', 'width_label', 'width', 'width_default', '');
         ctx.fmt.legend.bind('color', 'color_label', 'color', 'color_default', '');
         app.events.flow.pathInited = group => {
-            tooltip.add(group, arg => helper.pathTooltip(this._ctx, arg.data.leafs as number[], ctx.meta.flow.direction));
-            group.on('click', (p: any) => this._onMarkClick(p.leafs as number[]));
+            group.on('mouseover.tip', (arg: any) => this._showTip(helper.pathTooltip(this._ctx, arg.leafs as number[], ctx.meta.flow.direction)))
+                .on('mousemove.tip', () => this._moveTip())
+                .on('mouseout.tip', () => this._tip.hide())
+                .on('click', (p: any) => this._onMarkClick(p.leafs as number[]));
         };
         app.events.popup.onChanged = addrs => persist.banner.write(addrs, 10);
         app.events.pin.onDrag = (addr, loc) => {
             persist.manual.value({})[addr] = this._cfg.injections[addr] = loc;
         };
         app.events.pie.onPieCreated = group => {
-            tooltip.add(group, arg => helper.pieTooltip(arg.data.rows, arg.data.type, this._ctx));
-            group.on('click', (p: any) => this._onMarkClick(p.rows as number[]));
+            group.on('mouseover.tip', (arg: any) => this._showTip(helper.pieTooltip(arg.rows, arg.type, this._ctx)))
+                .on('mousemove.tip', () => this._moveTip())
+                .on('mouseout.tip', () => this._tip.hide())
+                .on('click', (p: any) => this._onMarkClick(p.rows as number[]));
         };
     }
 
@@ -188,6 +217,28 @@ export class Visual implements IVisual {
         this._selectionManager.select(this._rowIds(this._selRows), false);
     }
 
+    /** Fill + show the custom tooltip from a VisualTooltipDataItem list (header + rows). */
+    private _showTip(items: VisualTooltipDataItem[]): void {
+        if (!items || !items.length) {
+            return;
+        }
+        const header = items[0].header || '';
+        const rows = items.map(it => ({
+            label: it.displayName || '',
+            value: (it.value === null || it.value === undefined) ? '' : it.value + '',
+            color: it.color
+        }));
+        this._tip.show(header, rows);
+        this._moveTip();
+    }
+
+    private _moveTip(): void {
+        const e = d3event as MouseEvent;
+        if (e && this._target) {
+            this._tip.move(e.clientX, e.clientY, this._target);
+        }
+    }
+
     private _clearSelection(): void {
         if (this._suppressClear) {
             return;
@@ -203,6 +254,9 @@ export class Visual implements IVisual {
     private _applyAnimate(): void {
         const on = !!this._ctx.config('flow', 'animate');
         this._target && this._target.classList.toggle('flowmap-animated', on);
+        // Match the tooltip (and other chrome) to the basemap theme.
+        const dark = app.$state.mapctl ? app.$state.mapctl.format.style !== 'light' : true;
+        this._target && this._target.classList.toggle('flowmap-dark', dark);
     }
 
     /** Rebuild the corner group legend from the current secondary (Color) grouping. */
@@ -403,12 +457,37 @@ export class Visual implements IVisual {
 
         /* #region  update style */
         config.style = ctx.meta.flow.style;
+        const bySource = !!ctx.meta.flow.bundleBySource;
+        config.bundleBySource = bySource;
+        // Bundle strength 0..100 (higher = more merging). In this spiral tree a SMALLER
+        // spiral angle lets more branches join (see algo._tryJoin), so strength maps inversely
+        // to the angle: 0 → ~28° (loose/radial), 100 → ~6° (tight shared trunks).
+        const bsRaw = +ctx.meta.flow.bundleStrength;
+        const bs = isFinite(bsRaw) ? Math.max(0, Math.min(100, bsRaw)) : 50;
+        // Bundle strength → spiral angle. HIGHER strength = LARGER angle = the joint where two
+        // branches meet sits further out (near the leaves), so nearby routes share ONE trunk
+        // almost all the way and only split near their destinations (they "merge into one").
+        // Lower = joints near the hub = they split early. Default 50 → 18° (Math.PI/10), the
+        // original flowmap's tuned angle. Range 10°..26°.
+        setBundleAlpha((10 + 0.16 * bs) * Math.PI / 180);
+        // Corridors (edge-bundling): strength -> how far a route bends into a shared corridor
+        // (maxOffsetFrac) + iterations; cone -> directional tolerance; radius (% of the view) ->
+        // how near two routes must pass to be allowed to merge.
+        config.bundle.iterations = Math.round(60 + bs * 0.6);      // 60..120
+        config.bundle.maxOffsetFrac = 0.22 + bs * 0.0016;          // 0.22..0.38
+        const coneRaw = +ctx.meta.flow.bundleCone;
+        config.bundle.cone = (isFinite(coneRaw) ? Math.max(10, Math.min(90, coneRaw)) : 40) * Math.PI / 180;
+        const proxRaw = +ctx.meta.flow.bundleRadius;
+        const proxPct = isFinite(proxRaw) ? Math.max(2, Math.min(30, proxRaw)) : 7;
+        config.bundle.proximity = proxPct * 10;                    // % of the 1000-unit box
+        config.bundle.pointRadius = proxPct * 9;
+        config.bundle.splitColor = !!ctx.meta.flow.bundleSplitColor;
         if (config.style === null) {
             if (config.color.max) {
                 config.style = ctx.rows().length < 512 ? 'arc' : 'straight';
             }
             else {
-                groups = values(groupBy(ctx.rows(), ctx.key(sourceRole, 'color')));
+                groups = values(groupBy(ctx.rows(), (bySource ? ctx.key(sourceRole) : ctx.key(sourceRole, 'color'))));
                 if (keys(groups).length <= ctx.meta.flow.limit) {
                     config.style = 'flow';
                 }
@@ -450,7 +529,8 @@ export class Visual implements IVisual {
         /* #region  update bubble.for if null */
         copy(ctx.meta.bubble, config.bubble);
         if (config.bubble.for === null) {
-            config.bubble.for = ctx.meta.flow.direction !== 'in' ? 'dest' : 'origin';
+            // Show a bubble at BOTH ends by default, so every route endpoint has a dot.
+            config.bubble.for = 'both';
         }
         if (config.bubble.for === 'origin' || config.bubble.for === 'both') {
             config.bubble.out = ctx.key('Origin');
@@ -462,12 +542,30 @@ export class Visual implements IVisual {
 
         /* #region  collect groups and valid rows */
         let rows = ctx.rows();
-        if (config.style === 'flow') {
+        if (config.style === 'bundle') {
+            // Corridors: one global edge set (or one per colour when "keep colours apart").
+            // Cap the edge count so the O(E^2) bundling stays responsive.
+            const BUNDLE_CAP = 450;
+            let brows = ctx.rows().slice();
+            if (brows.length > BUNDLE_CAP) {
+                brows = sort(brows, r => -config.weight.conv(r)).slice(0, BUNDLE_CAP);
+            }
+            rows = brows;
+            if (config.bundle.splitColor && ctx.cat('color')) {
+                groups = values(groupBy(brows, ctx.key('color')));
+            }
+            else {
+                groups = [brows];
+            }
+        }
+        else if (config.style === 'flow') {
             if (!groups) {
-                groups = values(groupBy(ctx.rows(), ctx.key(sourceRole, 'color')));
+                groups = values(groupBy(ctx.rows(), (bySource ? ctx.key(sourceRole) : ctx.key(sourceRole, 'color'))));
             }
             const weights = groups.map(g => sum(g, i => config.weight.conv(i)));
-            groups = sort(groups, (_, i) => weights[i]);
+            // Heaviest first, so the Limit keeps the BUSIEST hubs (the original sorted ascending
+            // and kept the lightest — which hides the dominant hub on multi-origin data).
+            groups = sort(groups, (_, i) => -weights[i]);
             if (ctx.meta.flow.limit < groups.length) {
                 groups = groups.slice(0, ctx.meta.flow.limit);
                 rows = [].concat(...groups);
@@ -528,7 +626,10 @@ export class Visual implements IVisual {
             this._initing = true;
             const mapFmt = this._mapFormat();
             app.init(this._target, mapFmt, persist.banner.value() || [], ctl => {
-                ctl.onStyleChanged = style => this._ctx.persist('map', 'style', style);
+                ctl.onStyleChanged = style => {
+                    this._ctx.persist('map', 'style', style);
+                    this._target.classList.toggle('flowmap-dark', style !== 'light');
+                };
                 ctl.onBackgroundClick(() => this._clearSelection());
                 const [center, zoom] = persist.map.value() || [null, null];
                 center && ctl.setCenterZoom(center, zoom);
@@ -556,8 +657,10 @@ export class Visual implements IVisual {
                 app.repaint(config, 'map');
             }
             if (ctx.dirty()) {
-                // Flow lines: type/grouping change → full reset; colour/width → repaint flows.
-                if (fmt.flow.dirty(['style', 'direction', 'limit'])) {
+                // Flow lines: anything that changes the spider geometry (type, grouping,
+                // limit, bundle mode/strength) needs a full reset to rebuild the trees;
+                // colour/width only repaint the existing flows.
+                if (fmt.flow.dirty(['style', 'direction', 'limit', 'bundleBySource', 'bundleStrength', 'bundleCone', 'bundleRadius', 'bundleSplitColor'])) {
                     reset(config);
                 }
                 else if (fmt.flow.dirty()) {
@@ -616,7 +719,9 @@ export class Visual implements IVisual {
             case 'flow': {
                 const d = fmt.flow.dumper();
                 // style / grouping
-                d.metas(['style'], cfg).metas(cfg.style === 'flow', ['direction', 'limit']);
+                d.metas(['style'], cfg)
+                    .metas(cfg.style === 'flow', ['direction', 'limit', 'bundleBySource', 'bundleStrength'])
+                    .metas(cfg.style === 'bundle', ['direction', 'bundleStrength', 'bundleCone', 'bundleRadius', 'bundleSplitColor']);
                 d.metas(['animate']);
                 // color
                 d.metas(['colorItem']);

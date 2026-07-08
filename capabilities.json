@@ -161,13 +161,14 @@
                         "enumeration": [
                             {"displayName": "Straight line", "value": "straight"},
                             {"displayName": "Flow", "value": "flow"},
+                            {"displayName": "Corridors", "value": "bundle"},
                             {"displayName": "Great circle", "value": "arc"}
                         ]
                     }
                 },
                 "direction":{
                     "displayName": "> Group by",
-                    "description": "Merge lines based on origin or destination",
+                    "description": "Which shared end is the hub the routes fan out from. Pick the end many rows share (e.g. the arrival airport) so lines merge into trunks; the other end becomes the branch tips.",
                     "type": {
                         "enumeration": [
                             {"displayName": "Destination", "value": "in"},
@@ -179,6 +180,31 @@
                     "displayName": "> Limit",
                     "description": "Maximum number of flows displayed simultaneously",
                     "type": { "numeric": true }
+                },
+                "bundleBySource": {
+                    "displayName": "> Bundle by source",
+                    "description": "ON (recommended): merge every route from a hub into shared trunks regardless of the Color field; branches keep their colour. OFF: build a separate spider per colour (a high-cardinality Color then splits hubs into single radial lines).",
+                    "type": { "bool": true }
+                },
+                "bundleStrength": {
+                    "displayName": "> Bundle strength",
+                    "description": "Type = Flow: higher makes nearby routes share ONE trunk for longer and split only near their destinations; lower splits them earlier. Type = Corridors: higher = tighter corridors.",
+                    "type": { "numeric": true }
+                },
+                "bundleCone": {
+                    "displayName": "> Merge cone (°)",
+                    "description": "Corridors only. Directional tolerance: routes whose headings differ by less than this angle fuse into one corridor. Smaller = only near-parallel routes merge; larger = more routes collapse together.",
+                    "type": { "numeric": true }
+                },
+                "bundleRadius": {
+                    "displayName": "> Merge radius (%)",
+                    "description": "Corridors only. How near two routes must pass to fuse, as a percent of the view. Smaller = only routes that run right next to each other merge (less clutter collapsed); larger = routes further apart still merge.",
+                    "type": { "numeric": true }
+                },
+                "bundleSplitColor": {
+                    "displayName": "> Corridors: keep colours apart",
+                    "description": "Corridors only. ON: routes of different Color are bundled into separate corridors. OFF: everything merges into shared corridors regardless of colour.",
+                    "type": { "bool": true }
                 },
                 "animate": {
                     "displayName": "Animate flow",
@@ -330,7 +356,8 @@
                         "enumeration": [
                             {"displayName": "None", "value": "none"},
                             {"displayName": "Origin", "value": "origin"},
-                            {"displayName": "Destination", "value": "dest"}
+                            {"displayName": "Destination", "value": "dest"},
+                            {"displayName": "Both", "value": "both"}
                         ]
                     }
                 },

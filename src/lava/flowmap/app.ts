@@ -183,17 +183,24 @@ function addGroup(group: number[]) {
     pins.reset(rawGroups);
     return;
   }
-  const source = $state.config.source(group[0]);
-  if (!$state.loc(source)) {
-    $state.issues[group[0]] = { unlocate: source };
+  // In "Corridors" (bundle) mode every row is its own edge with its own source, so the
+  // usual shared-source check per group does not apply — validate source per row instead.
+  const isBundle = $state.config.style === 'bundle';
+  const gsource = $state.config.source(group[0]);
+  if (!isBundle && !$state.loc(gsource)) {
+    $state.issues[group[0]] = { unlocate: gsource };
     return;
   }
   const groupValid = [] as number[];
   const width = $state.config.weight.conv;
   for (let row of group) {
+    const source = isBundle ? $state.config.source(row) : gsource;
     const target = $state.config.target(row);
     const issue = {} as Issue;
-    if (target === source) {
+    if (isBundle && !$state.loc(source)) {
+      ($state.issues[row] = issue).unlocate = source;
+    }
+    else if (target === source) {
       ($state.issues[row] = issue).selflink = target;
       allValids.push(row);
     }

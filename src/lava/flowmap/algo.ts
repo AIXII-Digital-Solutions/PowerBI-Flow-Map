@@ -89,7 +89,11 @@ export function layout(source: IPoint, targets: IPoint[], weights?: number[]): I
         // value is 0.45.
         defaultCurveFraction: 0.45,
 
-        // This vlaue is the retricting angle between two tree branches. The default is PI/10.        
+        // Spiral angle of the tree edges. In this spiral-tree a SMALLER angle lets MORE
+        // branches join into shared trunks (see _tryJoin: two nodes merge only when their
+        // angular gap exceeds tan(alpha)·Δlog(radius)), i.e. smaller alpha = stronger
+        // bundling. PI/10 is the tuned default; overridable via setBundleAlpha (Flow lines
+        // → Bundle strength).
         alpha: Math.PI / 10,
 
         // This value is the threshold to check if two points are two close or not. The default
@@ -102,6 +106,16 @@ export function layout(source: IPoint, targets: IPoint[], weights?: number[]): I
         // How many iterations called to smooth edges
         sideLeafSmoothIterations: 2
     };
+
+    /** Override the spiral angle (radians); SMALLER = more branches merge = stronger bundling. */
+    export function setBundleAlpha(radians: number): void {
+        // Guard the spiral geometry: at exactly alpha = 45° (tan = 1) the greedy joint search
+        // can fail to converge and loops forever (hangs the visual). Keep well inside a safe
+        // band so no caller / setting value can ever reach the singularity.
+        const min = Math.PI / 45;   //  4°
+        const max = Math.PI / 4.5;  // 40°
+        config.alpha = Math.max(min, Math.min(max, radians));
+    }
 
     class FlowPath implements IPath {
         public id: string;

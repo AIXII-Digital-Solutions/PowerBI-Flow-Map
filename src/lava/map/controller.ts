@@ -354,6 +354,7 @@ export class Controller {
     container.appendChild(this._overlay);
 
     this._buildStyleControl(container);
+    this._buildBrand(container);
 
     map.on('move', () => this._viewChange(false));
     map.on('moveend', () => this._viewChange(true));
@@ -479,6 +480,21 @@ export class Controller {
     }
     this._styleControl = control;
     container.appendChild(control);
+  }
+
+  /** Bottom-left ownership brand: AIXII logo + copyright. Logo colour follows the theme
+   *  (black on light, white on dark) via the CSS mask in style/visual.less. */
+  private _buildBrand(container: HTMLElement): void {
+    const brand = document.createElement('div');
+    brand.className = 'flowmap-brand';
+    const logo = document.createElement('span');
+    logo.className = 'flowmap-brand-logo';
+    const text = document.createElement('span');
+    text.className = 'flowmap-brand-text';
+    text.textContent = '© AIXII Digital Solutions LTD';
+    brand.appendChild(logo);
+    brand.appendChild(text);
+    container.appendChild(brand);
   }
 
   private _syncStyleButtons(): void {

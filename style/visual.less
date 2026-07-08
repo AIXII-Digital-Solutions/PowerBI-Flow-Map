@@ -2,6 +2,8 @@
 // not less-parsed) so the map panes, controls and GL canvas position correctly.
 @import (inline) "../node_modules/leaflet/dist/leaflet.css";
 @import (inline) "../node_modules/maplibre-gl/dist/maplibre-gl.css";
+/* AIXII brand font (CoFo Sans), inlined as @font-face data URIs. */
+@import (inline) "fonts.less";
 
 /* ---- Flowmap basemap (Leaflet + MapLibre GL) ---- */
 /* Neutralise Leaflet's light (#ddd) default background so no light frame flashes. */
@@ -46,7 +48,7 @@
     border-radius: 6px;
     background: rgba(120, 125, 135, 0.3);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
-    font-family: "Segoe UI", Arial, sans-serif;
+    font-family: "CoFo Sans", "Segoe UI", Arial, sans-serif;
     button {
         min-width: 48px;
         min-height: 23px;
@@ -89,17 +91,57 @@
 .flowmap-basemap .leaflet-control-zoom a:hover {
     background: rgba(120, 125, 135, 0.55);
 }
-/* Attribution (bottom-right) — dark & subtle, matching the reference basemap. */
+/* Attribution (bottom-right) — very subtle & translucent, adapts to the basemap theme. */
 .flowmap-basemap .leaflet-control-attribution {
-    background: rgba(5, 6, 8, 0.72);
-    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.26);
+    color: #4b5563;
     max-width: ~"min(420px, calc(100% - 16px))";
     font-size: 9px;
     line-height: 1.2;
-    opacity: 0.72;
+    opacity: 0.5;
 }
 .flowmap-basemap .leaflet-control-attribution a {
-    color: #f8fafc;
+    color: #1f2937;
+}
+.flowmap-dark .flowmap-basemap .leaflet-control-attribution {
+    background: rgba(5, 6, 8, 0.26);
+    color: #cbd5e1;
+}
+.flowmap-dark .flowmap-basemap .leaflet-control-attribution a {
+    color: #e5e7eb;
+}
+
+/* Brand: AIXII logo + copyright, bottom-left. The logo is tinted via `currentColor` through a
+   CSS mask, so it is black on the light basemap and white on the dark one. */
+@aixii-logo: ~"data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20125%20178%22%3E%3Cpath%20d%3D%22M24.1408%200L0%200L39.1738%2064.4377C40.6414%2066.8316%2040.9801%2068.5274%2040.9801%2070.2231C40.9801%2072.1183%2040.5285%2073.9138%2039.2867%2076.4075L0%20146.232H24.1408L62.6394%2076.4075C63.971%2073.9923%2064.9265%2072.9096%2064.9267%2070.2231C64.9268%2068.4086%2063.9449%2066.697%2062.5966%2064.4377L24.1408%200Z%22%2F%3E%3Cpath%20d%3D%22M99.9621%20177.792H124.103L84.9291%20113.355C83.4615%20110.961%2083.1228%20109.265%2083.1228%20107.569C83.1228%20105.674%2083.5744%20103.879%2084.8162%20101.385L124.103%2031.5608L99.9621%2031.5608L61.4635%20101.385C60.1319%20103.8%2059.1765%20104.883%2059.1763%20107.569C59.1762%20109.384%2060.158%20111.095%2061.5063%20113.355L99.9621%20177.792Z%22%2F%3E%3C%2Fsvg%3E";
+.flowmap-brand {
+    position: absolute;
+    left: 10px;
+    bottom: 7px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    color: #111827;
+    opacity: 0.9;
+}
+.flowmap-dark .flowmap-brand {
+    color: #ffffff;
+}
+.flowmap-brand-logo {
+    width: 13px;
+    height: 18px;
+    flex: none;
+    background-color: currentColor;
+    -webkit-mask: url("@{aixii-logo}") no-repeat center / contain;
+    mask: url("@{aixii-logo}") no-repeat center / contain;
+}
+.flowmap-brand-text {
+    font: 600 10px/1.15 "CoFo Sans", "Segoe UI", Arial, sans-serif;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 svg {
@@ -136,6 +178,14 @@ svg {
 
 svg .flow {
     cursor: pointer;
+    /* Capture hover/clicks across the whole stroke, not only painted pixels. */
+    pointer-events: stroke;
+}
+/* Wide, invisible hit area under each line so thin lines are easy to hover/click
+   (non-scaling-stroke keeps its width constant regardless of the group's zoom scale). */
+.hit.flow {
+    stroke-width: 11px;
+    vector-effect: non-scaling-stroke;
 }
 
 /* Selection: clicking a flow/bubble dims the rest (click-to-focus, like the reference). */
@@ -176,7 +226,7 @@ svg .flow {
 .flowmap-legend {
     position: absolute;
     z-index: 9999;
-    font-family: "Segoe UI", Arial, sans-serif;
+    font-family: "CoFo Sans", "Segoe UI", Arial, sans-serif;
     display: flex;
     flex-direction: column;
     width: 130px;
@@ -261,6 +311,83 @@ svg .flow {
 }
 .flowmap-legend.orient-horizontal .flowmap-legend-row { width: 128px; }
 .flowmap-legend.orient-horizontal .flowmap-legend-name { -webkit-line-clamp: 1; }
+
+/* Custom hover tooltip — bold header + "label: value" rows + colour swatch. */
+.flowmap-tooltip {
+    position: absolute;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    max-width: 320px;
+    border: 1px solid rgba(15, 23, 42, 0.16);
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111827;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+    font-family: "CoFo Sans", "Segoe UI", Arial, sans-serif;
+    font-size: 11px;
+    line-height: 1.35;
+    padding: 6px 9px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease, visibility 0s linear 0.14s;
+}
+.flowmap-tooltip.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.flowmap-tooltip-header {
+    font-weight: 800;
+    font-size: 12px;
+    color: #111827;
+    margin-bottom: 4px;
+}
+.flowmap-tooltip-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: baseline;
+    margin-top: 2px;
+}
+.flowmap-tooltip-label {
+    font-weight: 700;
+    color: #4b5563;
+    white-space: nowrap;
+}
+.flowmap-tooltip-value {
+    text-align: right;
+    color: #111827;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.flowmap-tooltip-swatch {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    border-radius: 2px;
+    vertical-align: middle;
+}
+/* Dark basemap → dark tooltip. */
+.flowmap-dark .flowmap-tooltip {
+    background: #1a1a1e;
+    color: #f8fafc;
+    border-color: rgba(148, 163, 184, 0.35);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+.flowmap-dark .flowmap-tooltip-header {
+    color: #ffffff;
+}
+.flowmap-dark .flowmap-tooltip-label {
+    color: #aab2bd;
+}
+.flowmap-dark .flowmap-tooltip-value {
+    color: #ffffff;
+}
 
 .tip {
     pointer-events: none;
