@@ -1,0 +1,28 @@
+{
+    "visual": {
+        "name": "flowMapAixii",
+        "displayName": "Flow Map",
+        "guid": "flowMapAixiiCA14AAF3F1104BB9BBB7656B48BBC4D7",
+        "visualClassName": "Visual",
+        "version": "1.0.0.0",
+        "description": "Flowmap is a diagram that visualizes the movement of objects from one location to another.",
+        "supportUrl": "https://github.com/AIXII-Digital-Solutions/PowerBI-Flow-Map",
+        "gitHubUrl": "https://github.com/AIXII-Digital-Solutions/PowerBI-Flow-Map"
+    },
+    "apiVersion": "5.3.0",
+    "author": {
+        "name": "AIXII Digital Solutions",
+        "email": "aleksandr.ogienko@aixii.com"
+    },
+    "assets": {
+        "icon": "assets/icon.png"
+    },
+    "externalJS": [],
+    "style": "style/visual.less",
+    "capabilities": "capabilities.json",
+    "dependencies": null,
+    "stringResources": [
+        "stringResources/en-US/resources.resjson",
+        "stringResources/ru-RU/resources.resjson"
+    ]
+}
