@@ -113,11 +113,23 @@ export function all() {
     return root.selectAll<Pie>('.pie');
 }
 
+/** Every route that touches a location, both directions: departures (its origin bubble) plus
+ *  arrivals (its destination bubble). Clicking a hub selects all of them, not just one leg. */
+export function connected(addr: string): number[] {
+    const o = origins[addr], d = destins[addr];
+    if (!o) { return d ? d.rows.slice() : []; }
+    if (!d) { return o.rows.slice(); }
+    const seen = {} as StringMap<boolean>, out = [] as number[];
+    for (const r of o.rows) { if (!seen[r]) { seen[r] = true; out.push(r); } }
+    for (const r of d.rows) { if (!seen[r]) { seen[r] = true; out.push(r); } }
+    return out;
+}
+
 let _rows = [] as number[];
 export function reset(data: number[]) {
     _rows = data;
     root.selectAll('*').remove();
-    origins = destins = {};
+    origins = {}; destins = {}; // separate objects — `a = b = {}` would alias one map to both
     if ($state.config.bubble.out) {
         origins = build(groupBy(data, $state.config.bubble.out), 'out');
     }
@@ -142,8 +154,15 @@ function build(groups: StringMap<number[]>, type: 'in' | 'out') {
 
 function resetRadius() {
     const width = $state.width;
-    const outFactor = $state.config.bubble.scaleOut / 10;
-    const inFactor = $state.config.bubble.scaleIn / 10;
+    // The bigger coefficient always belongs to the HUB end — the one being grouped by. Grouping
+    // by Origin: departures are the hubs (big), arrivals are the leaves (small). Grouping by
+    // Destination: it flips — arrivals become the hubs (big) and departures the leaves (small).
+    // Either way the radius still grows with the bubble's own total (flights in/out of it).
+    const hub = $state.config.bubble.scaleOut / 10;
+    const leaf = $state.config.bubble.scaleIn / 10;
+    const byDest = $state.config.direction === 'in';
+    const outFactor = byDest ? leaf : hub;
+    const inFactor = byDest ? hub : leaf;
     const radius = (w: number, factor: number) => Math.sqrt(width(w)) * factor + 2;
     for (const pie of values(origins)) {
         pie.radius(radius(pie.total, outFactor));

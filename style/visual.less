@@ -74,6 +74,48 @@
     }
 }
 
+/* On-canvas Group-by / Animate controls — EXACT same panel/colour scheme as the corner legend
+   and zoom control (translucent grey, #e5e7eb text) in BOTH themes. Position is set inline by JS
+   (so a control slides sideways to dodge the legend / the other control). Built outside the
+   Leaflet container so the map never eats their clicks. */
+.flowmap-map-control {
+    position: absolute;
+    z-index: 9999;
+    display: flex;
+    overflow: hidden;
+    border: 1px solid rgba(120, 130, 145, 0.26);
+    border-radius: 6px;
+    background: rgba(120, 125, 135, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+    font-family: "CoFo Sans", "Segoe UI", Arial, sans-serif;
+}
+.flowmap-map-control button {
+    /* buttons do NOT inherit font-family — set it explicitly so CoFo Sans applies. */
+    font-family: "CoFo Sans", "Segoe UI", Arial, sans-serif;
+    box-sizing: border-box;
+    height: 26px;                 /* same height as the zoom / legend buttons */
+    border: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.14);
+    background: transparent;
+    color: #e5e7eb;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.flowmap-map-control button:last-child { border-right: 0; }
+.flowmap-map-control button:hover { background: rgba(120, 125, 135, 0.5); }
+/* Active = exactly the legend's SELECTED-row look: soft red tint + inset red bar (not solid red). */
+.flowmap-map-control button.active {
+    background: rgba(212, 0, 0, 0.32);
+    box-shadow: inset 2px 0 0 #d40000;
+    color: #ffffff;
+}
+/* Group by: two equal-width segments. Animate: a single button exactly one segment wide. */
+.flowmap-dir-control button { width: 94px; }
+.flowmap-anim-control button { width: 94px; }
+
 /* Zoom control (top-left) — dark & subtle, matching the reference basemap. */
 .flowmap-basemap .leaflet-control-zoom {
     border: 0;
@@ -195,8 +237,18 @@ svg .flow {
 .vflow.dimmed {
     opacity: 0.16;
 }
+/* Per-segment selection: clicking a branch lights only that route (its branch + the trunk
+   chain back to the hub); every other segment dims — see flow.ts VisualFlow.highlight.
+   Deliberately NOT transitioned: animating opacity on every path made select/clear stutter.
+   The group-level .vflow transition above still eases whole-spider dimming (one node each). */
+svg .base.flow.dimmed {
+    opacity: 0.1;
+}
 .pie {
     cursor: pointer;
+    /* Re-enable interaction: the parent `svg` sets pointer-events:none (inherited), and unlike
+       .flow / .glyph the bubbles never overrode it — so clicks and hovers weren't reaching them. */
+    pointer-events: auto;
     transition: opacity 0.15s ease;
 }
 .pie.dimmed {

@@ -16,14 +16,22 @@
             "description": "Addresses/labels to differentiate origin locations",
             "name": "Origin",
             "kind": "Grouping",
-            "requiredTypes": [ {"text": true} ]
+            "requiredTypes": [
+                {
+                    "text": true
+                }
+            ]
         },
         {
             "displayName": "Destination",
             "description": "Addresses/labels to differentiate destination locations",
             "name": "Dest",
             "kind": "Grouping",
-            "requiredTypes": [ {"text": true} ]
+            "requiredTypes": [
+                {
+                    "text": true
+                }
+            ]
         },
         {
             "displayName": "Width",
@@ -43,10 +51,12 @@
             "name": "OLati",
             "kind": "Measure",
             "requiredTypes": [
-                {"geography": {
-                    "latitude": true,
-                    "longitude": true
-                }}
+                {
+                    "geography": {
+                        "latitude": true,
+                        "longitude": true
+                    }
+                }
             ]
         },
         {
@@ -55,34 +65,40 @@
             "name": "OLong",
             "kind": "Measure",
             "requiredTypes": [
-                {"geography": {
-                    "latitude": true,
-                    "longitude": true
-                }}
+                {
+                    "geography": {
+                        "latitude": true,
+                        "longitude": true
+                    }
+                }
             ]
         },
         {
             "displayName": "Destination latitude",
-            "description": "(Optional) Latitudes of the corresponding destinations",            
+            "description": "(Optional) Latitudes of the corresponding destinations",
             "name": "DLati",
             "kind": "Measure",
             "requiredTypes": [
-                {"geography": {
-                    "latitude": true,
-                    "longitude": true
-                }}
+                {
+                    "geography": {
+                        "latitude": true,
+                        "longitude": true
+                    }
+                }
             ]
         },
         {
             "displayName": "Destination longitude",
-            "description": "(Optional) The longitudes of the corresponding destinations",            
+            "description": "(Optional) The longitudes of the corresponding destinations",
             "name": "DLong",
             "kind": "Measure",
             "requiredTypes": [
-                {"geography": {
-                    "latitude": true,
-                    "longitude": true
-                }}
+                {
+                    "geography": {
+                        "latitude": true,
+                        "longitude": true
+                    }
+                }
             ]
         },
         {
@@ -104,48 +120,123 @@
             "kind": "Measure"
         },
         {
-            "displayName": "Label",
-            "description": "(Optional) Content to show when clicking icons.",
-            "name": "Label",
-            "kind": "Measure"
+            "name": "FilterBy",
+            "displayName": "Filter by",
+            "description": "Restricts the map to specific routes. Drop a column (e.g. City Pairs) to carry its filter context, or a measure that returns BLANK for the routes you do not want.",
+            "kind": "GroupingOrMeasure"
         }
     ],
     "dataViewMappings": [
         {
             "conditions": [
                 {
-                    "color" : {"max": 1},
-                    "Origin": {"max": 1},
-                    "Dest"  : {"max": 1},
-                    "width" : {"max": 1},
-                    "OLati" : {"max": 1},
-                    "OLong" : {"max": 1},
-                    "DLati" : {"max": 1},
-                    "DLong" : {"max": 1},
-                    "OName" : {"max": 1},
-                    "DName" : {"max": 1}
+                    "color": {
+                        "max": 1
+                    },
+                    "Origin": {
+                        "max": 1
+                    },
+                    "Dest": {
+                        "max": 1
+                    },
+                    "width": {
+                        "max": 1
+                    },
+                    "OLati": {
+                        "max": 1
+                    },
+                    "OLong": {
+                        "max": 1
+                    },
+                    "DLati": {
+                        "max": 1
+                    },
+                    "DLong": {
+                        "max": 1
+                    },
+                    "OName": {
+                        "max": 1
+                    },
+                    "DName": {
+                        "max": 1
+                    },
+                    "FilterBy": {
+                        "max": 1
+                    }
                 }
             ],
             "categorical": {
                 "categories": {
                     "select": [
-                        {"bind": { "to": "Origin" }},
-                        {"bind": { "to": "color"  }},
-                        {"bind": { "to": "Dest"   }},
-                        {"bind": { "to": "width"  }}
+                        {
+                            "bind": {
+                                "to": "Origin"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "color"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "Dest"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "width"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "FilterBy"
+                            }
+                        }
                     ],
-                    "dataReductionAlgorithm": { "top": { "count": 100000 } }
+                    "dataReductionAlgorithm": {
+                        "top": {
+                            "count": 100000
+                        }
+                    }
                 },
                 "values": {
                     "select": [
-                        {"bind": { "to": "OLati" }},
-                        {"bind": { "to": "OLong" }},
-                        {"bind": { "to": "DLati" }},
-                        {"bind": { "to": "DLong" }},
-                        {"for": { "in": "Tooltip" }},
-                        {"for": { "in": "Label" }},
-                        {"for": { "in": "OName" }},
-                        {"for": { "in": "DName" }}
+                        {
+                            "bind": {
+                                "to": "OLati"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "OLong"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "DLati"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "DLong"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "Tooltip"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "OName"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "DName"
+                            }
+                        }
                     ]
                 }
             }
@@ -159,194 +250,304 @@
                     "displayName": "Type",
                     "type": {
                         "enumeration": [
-                            {"displayName": "Straight line", "value": "straight"},
-                            {"displayName": "Flow", "value": "flow"},
-                            {"displayName": "Corridors", "value": "bundle"},
-                            {"displayName": "Great circle", "value": "arc"}
+                            {
+                                "displayName": "Flow",
+                                "value": "flow"
+                            },
+                            {
+                                "displayName": "Corridors",
+                                "value": "bundle"
+                            },
+                            {
+                                "displayName": "Great circle",
+                                "value": "arc"
+                            }
                         ]
                     }
                 },
-                "direction":{
+                "direction": {
                     "displayName": "> Group by",
                     "description": "Which shared end is the hub the routes fan out from. Pick the end many rows share (e.g. the arrival airport) so lines merge into trunks; the other end becomes the branch tips.",
                     "type": {
                         "enumeration": [
-                            {"displayName": "Destination", "value": "in"},
-                            {"displayName": "Origin", "value": "out"}
+                            {
+                                "displayName": "Destination",
+                                "value": "in"
+                            },
+                            {
+                                "displayName": "Origin",
+                                "value": "out"
+                            }
                         ]
                     }
                 },
-                "limit":{
+                "directionControl": {
+                    "displayName": "> Group by button on map",
+                    "description": "Show an on-canvas Origin/Destination switch. The 'Group by' value above is its default.",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "limit": {
                     "displayName": "> Limit",
                     "description": "Maximum number of flows displayed simultaneously",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "bundleBySource": {
                     "displayName": "> Bundle by source",
                     "description": "ON (recommended): merge every route from a hub into shared trunks regardless of the Color field; branches keep their colour. OFF: build a separate spider per colour (a high-cardinality Color then splits hubs into single radial lines).",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
                 "bundleStrength": {
                     "displayName": "> Bundle strength",
                     "description": "Type = Flow: higher makes nearby routes share ONE trunk for longer and split only near their destinations; lower splits them earlier. Type = Corridors: higher = tighter corridors.",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "bundleCone": {
                     "displayName": "> Merge cone (°)",
                     "description": "Corridors only. Directional tolerance: routes whose headings differ by less than this angle fuse into one corridor. Smaller = only near-parallel routes merge; larger = more routes collapse together.",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "bundleRadius": {
                     "displayName": "> Merge radius (%)",
                     "description": "Corridors only. How near two routes must pass to fuse, as a percent of the view. Smaller = only routes that run right next to each other merge (less clutter collapsed); larger = routes further apart still merge.",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "bundleSplitColor": {
                     "displayName": "> Corridors: keep colours apart",
                     "description": "Corridors only. ON: routes of different Color are bundled into separate corridors. OFF: everything merges into shared corridors regardless of colour.",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
                 "animate": {
                     "displayName": "Animate flow",
                     "description": "Animated dashes flowing toward the destinations",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
-                "colorCustomize":{
+                "animateControl": {
+                    "displayName": "> Animate button on map",
+                    "description": "Show an on-canvas button to toggle the animation. The 'Animate flow' value above is its default.",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "directionControlPosition": {
+                    "displayName": "> Group by button position",
+                    "description": "Which corner the on-canvas Group by switch is pinned to.",
+                    "type": {
+                        "enumeration": [
+                            { "displayName": "Top left", "value": "topLeft" },
+                            { "displayName": "Top right", "value": "topRight" },
+                            { "displayName": "Bottom left", "value": "bottomLeft" },
+                            { "displayName": "Bottom right", "value": "bottomRight" }
+                        ]
+                    }
+                },
+                "animateControlPosition": {
+                    "displayName": "> Animate button position",
+                    "description": "Which corner the on-canvas Animate button is pinned to.",
+                    "type": {
+                        "enumeration": [
+                            { "displayName": "Top left", "value": "topLeft" },
+                            { "displayName": "Top right", "value": "topRight" },
+                            { "displayName": "Bottom left", "value": "bottomLeft" },
+                            { "displayName": "Bottom right", "value": "bottomRight" }
+                        ]
+                    }
+                },
+                "colorCustomize": {
                     "displayName": "Color: specify individually",
-                    "type": { "bool": true}
+                    "type": {
+                        "bool": true
+                    }
                 },
                 "colorAutofill": {
                     "displayName": "> Color (autofill)",
                     "description": "Choose distinct colors if unspecified",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
-                "colorItem":{
+                "colorItem": {
                     "displayName": "Line color",
-                    "type": { "fill": { "solid": { "color": true } } }
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
                 },
-                "colorMin":{
+                "colorMin": {
                     "displayName": "> Color min",
-                    "type": { "fill": { "solid": { "color": true } } }
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
                 },
-                "colorMax":{
+                "colorMax": {
                     "displayName": "> Color max",
-                    "type": { "fill": { "solid": { "color": true } } }
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
                 },
                 "widthCustomize": {
                     "displayName": "Width: specify individually",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
                 "widthItem": {
                     "displayName": "Line width",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "widthScale": {
                     "displayName": "Width scale",
                     "description": "Scale for the width field",
                     "type": {
                         "enumeration": [
-                            {"displayName": "None", "value": "none"},
-                            {"displayName": "Log", "value": "log"},
-                            {"displayName": "Linear", "value": "linear"}
+                            {
+                                "displayName": "None",
+                                "value": "none"
+                            },
+                            {
+                                "displayName": "Log",
+                                "value": "log"
+                            },
+                            {
+                                "displayName": "Linear",
+                                "value": "linear"
+                            }
                         ]
                     }
                 },
-                "widthUnit":{
+                "widthUnit": {
                     "displayName": "> Unit",
                     "description": "Unit width for all lines",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "widthMax": {
                     "displayName": "> Max",
                     "description": "Maximum width for all lines",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "widthMin": {
                     "displayName": "> Min",
                     "description": "Minimum width for all lines",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
                 "persist": {
                     "displayName": "Flow Persist",
-                    "type": { "text": true}
-                }
-            }
-        },
-        "legend": {
-            "displayName": "Legend",
-            "properties": {
-                "show": {
-                    "displayName": "Show",
-                    "type": { "bool": true }
-                },
-                "position": {
-                    "displayName": "Position",
-                    "type": { "enumeration":  [
-                        {"displayName": "Top", "value": "top"},
-                        {"displayName": "Bottom", "value": "bot"}
-                    ]}
-                },
-                "color":{
-                    "displayName": "Color legend",
-                    "description": "visibility of color legend",
-                    "type": { "bool": true }
-                },
-                "fontSize": {
-                    "displayName": "Text size",
-                    "type": { "formatting": { "fontSize": true } }
-                },
-                "width": {
-                    "displayName": "Width legend",
-                    "description": "visibility of width legend",
-                    "type": { "bool": true }
-                },
-                "color_default": {
-                    "displayName": "> (Autofill)",
-                    "description": "Show default labels if unspecified",
-                    "type": { "bool": true }
-                },
-                "width_default": {
-                    "displayName": "> (Autofill)",
-                    "description": "Show default labels if unspecified",
-                    "type": { "bool": true }
-                },
-                "width_label": {
-                    "displayName": "> Label",
-                    "description": "Edit label, (hidden when empty)",
-                    "type": { "text": true }
-                },
-                "color_label": {
-                    "displayName": "> Label",
-                    "description": "Edit label, (hidden when empty)",
-                    "type": { "text": true }
-                },
-                "persist": {
-                    "displayName": "Legend Persist",
-                    "type": { "text": true}
+                    "type": {
+                        "text": true
+                    }
                 }
             }
         },
         "groupLegend": {
-            "displayName": "Group legend",
+            "displayName": "Legend",
             "properties": {
-                "show": { "displayName": "Show", "type": { "bool": true } },
-                "position": { "displayName": "Position", "type": { "enumeration": [
-                    {"displayName": "Top right", "value": "topRight"},
-                    {"displayName": "Top left", "value": "topLeft"},
-                    {"displayName": "Bottom right", "value": "bottomRight"},
-                    {"displayName": "Bottom left", "value": "bottomLeft"}
-                ]}},
-                "orientation": { "displayName": "Orientation", "type": { "enumeration": [
-                    {"displayName": "Vertical", "value": "vertical"},
-                    {"displayName": "Horizontal (2 rows)", "value": "horizontal"}
-                ]}},
-                "expanded": { "displayName": "Expanded by default", "type": { "bool": true } },
-                "width": { "displayName": "Width (px)", "type": { "numeric": true } },
-                "fontSize": { "displayName": "Text size", "type": { "formatting": { "fontSize": true } } },
-                "title": { "displayName": "Title", "type": { "text": true } }
+                "show": {
+                    "displayName": "Show",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "position": {
+                    "displayName": "Position",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "displayName": "Top right",
+                                "value": "topRight"
+                            },
+                            {
+                                "displayName": "Top left",
+                                "value": "topLeft"
+                            },
+                            {
+                                "displayName": "Bottom right",
+                                "value": "bottomRight"
+                            },
+                            {
+                                "displayName": "Bottom left",
+                                "value": "bottomLeft"
+                            }
+                        ]
+                    }
+                },
+                "orientation": {
+                    "displayName": "Orientation",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "displayName": "Vertical",
+                                "value": "vertical"
+                            },
+                            {
+                                "displayName": "Horizontal (2 rows)",
+                                "value": "horizontal"
+                            }
+                        ]
+                    }
+                },
+                "expanded": {
+                    "displayName": "Expanded by default",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "width": {
+                    "displayName": "Width (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "fontSize": {
+                    "displayName": "Text size",
+                    "type": {
+                        "formatting": {
+                            "fontSize": true
+                        }
+                    }
+                },
+                "title": {
+                    "displayName": "Title",
+                    "type": {
+                        "text": true
+                    }
+                }
             }
         },
-        "bubble":{
+        "bubble": {
             "displayName": "Bubble",
             "properties": {
                 "for": {
@@ -354,154 +555,360 @@
                     "description": "How to show bubbles",
                     "type": {
                         "enumeration": [
-                            {"displayName": "None", "value": "none"},
-                            {"displayName": "Origin", "value": "origin"},
-                            {"displayName": "Destination", "value": "dest"},
-                            {"displayName": "Both", "value": "both"}
+                            {
+                                "displayName": "None",
+                                "value": "none"
+                            },
+                            {
+                                "displayName": "Origin",
+                                "value": "origin"
+                            },
+                            {
+                                "displayName": "Destination",
+                                "value": "dest"
+                            },
+                            {
+                                "displayName": "Both",
+                                "value": "both"
+                            }
                         ]
                     }
                 },
-                "slice":{
+                "slice": {
                     "displayName": "Show slice",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
                 "bubbleColor": {
                     "displayName": "> Color",
-                    "type": { "fill": { "solid": { "color": true } } }
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
                 },
                 "scaleOut": {
-                    "displayName": "Departure size",
-                    "description": "Size coefficient for origin (departure) bubbles",
-                    "type": { "formatting": { "fontSize": true } }
+                    "displayName": "> Hub bubble scale",
+                    "description": "Size coefficient for the grouped (hub) end — departures when Group by = Origin, arrivals when Group by = Destination. Each bubble still grows with its own flight count.",
+                    "type": {
+                        "formatting": {
+                            "fontSize": true
+                        }
+                    }
                 },
                 "scaleIn": {
-                    "displayName": "Arrival size",
-                    "description": "Size coefficient for destination (arrival) bubbles",
-                    "type": { "formatting": { "fontSize": true } }
+                    "displayName": "> Leaf bubble scale",
+                    "description": "Size coefficient for the far (leaf) end — arrivals when Group by = Origin, departures when Group by = Destination.",
+                    "type": {
+                        "formatting": {
+                            "fontSize": true
+                        }
+                    }
                 },
                 "label": {
                     "displayName": "Tooltip",
                     "description": "How to show labels",
                     "type": {
                         "enumeration": [
-                            {"displayName": "Hide", "value": "hide", "description": "hide labels"},
-                            {"displayName": "All", "value": "all", "description": "Show all labels"},
-                            {"displayName": "By click", "value": "manual", "description": "Click to show/hide"},
-                            {"displayName": "None", "value": "none", "description": "Show no labels"}
+                            {
+                                "displayName": "Hide",
+                                "value": "hide",
+                                "description": "hide labels"
+                            },
+                            {
+                                "displayName": "All",
+                                "value": "all",
+                                "description": "Show all labels"
+                            },
+                            {
+                                "displayName": "By click",
+                                "value": "manual",
+                                "description": "Click to show/hide"
+                            },
+                            {
+                                "displayName": "None",
+                                "value": "none",
+                                "description": "Show no labels"
+                            }
                         ]
                     }
                 },
                 "labelOpacity": {
                     "displayName": "> Background opacity",
-                    "type": { "formatting": {"fontSize": true} }
+                    "type": {
+                        "formatting": {
+                            "fontSize": true
+                        }
+                    }
                 },
                 "labelColor": {
                     "displayName": "> Background color",
                     "description": "Change the background colors",
-                    "type": { "fill": { "solid": { "color": true } } }
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
                 }
             }
         },
-        "valueFormat":{
+        "valueFormat": {
             "displayName": "Detail format",
             "description": "Change the format of values shown in tooltips, etc.",
             "properties": {
-                "sort":{
+                "sort": {
                     "displayName": "Sort",
                     "description": "Sorting by the Width field",
-                    "type": { "enumeration": [
-                        {"displayName": "Ascending", "value": "asc"},
-                        {"displayName": "Descending", "value": "des"}
-                    ]}
+                    "type": {
+                        "enumeration": [
+                            {
+                                "displayName": "Ascending",
+                                "value": "asc"
+                            },
+                            {
+                                "displayName": "Descending",
+                                "value": "des"
+                            }
+                        ]
+                    }
                 },
-                "top":{
+                "top": {
                     "displayName": "Top",
                     "description": "Truncate the list",
-                    "type": {"numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
-                "notation":{
+                "notation": {
                     "displayName": "Number format",
-                    "type": {"enumeration": [
-                            {"displayName": "None", "value": "none"},
-                            {"displayName": "Decimal (SI)", "value": "decSi"},
-                            {"displayName": "Decimal", "value": "dec"},
-                            {"displayName": "Exponent", "value": "exp"},
-                            {"displayName": "Percentage", "value": "per"}
-                    ]}
+                    "type": {
+                        "enumeration": [
+                            {
+                                "displayName": "None",
+                                "value": "none"
+                            },
+                            {
+                                "displayName": "Decimal (SI)",
+                                "value": "decSi"
+                            },
+                            {
+                                "displayName": "Decimal",
+                                "value": "dec"
+                            },
+                            {
+                                "displayName": "Exponent",
+                                "value": "exp"
+                            },
+                            {
+                                "displayName": "Percentage",
+                                "value": "per"
+                            }
+                        ]
+                    }
                 },
-                "unit":{
+                "unit": {
                     "displayName": "Unit",
-                    "type": {"enumeration": [
-                            {"displayName": "None", "value": "none"},
-                            {"displayName": "Thousands", "value": "K"},
-                            {"displayName": "Millions", "value": "M"},
-                            {"displayName": "Billions", "value": "bn"},
-                            {"displayName": "Trillions", "value": "T"}
-                    ]}
+                    "type": {
+                        "enumeration": [
+                            {
+                                "displayName": "None",
+                                "value": "none"
+                            },
+                            {
+                                "displayName": "Thousands",
+                                "value": "K"
+                            },
+                            {
+                                "displayName": "Millions",
+                                "value": "M"
+                            },
+                            {
+                                "displayName": "Billions",
+                                "value": "bn"
+                            },
+                            {
+                                "displayName": "Trillions",
+                                "value": "T"
+                            }
+                        ]
+                    }
                 },
-                "precFix":{
+                "precFix": {
                     "displayName": "Precision",
                     "description": "The number of digits that follow the decimal point",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
-                "precSig":{
+                "precSig": {
                     "displayName": "Precision",
                     "description": "The number of significant digits",
-                    "type": { "numeric": true }
+                    "type": {
+                        "numeric": true
+                    }
                 },
-                "fix":{
+                "fix": {
                     "displayName": "Fixed point",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
-                "comma":{
+                "comma": {
                     "displayName": "Comma for thousands",
-                    "type": { "bool": true }
+                    "type": {
+                        "bool": true
+                    }
                 },
                 "prefix": {
                     "displayName": "Prefix",
-                    "type": { "text": true }
+                    "type": {
+                        "text": true
+                    }
                 },
                 "postfix": {
                     "displayName": "Postfix",
-                    "type": { "text": true }
-                }                
+                    "type": {
+                        "text": true
+                    }
+                }
             }
         },
         "map": {
             "displayName": "Map",
             "properties": {
-                "style": { "displayName": "Map style", "type": { "enumeration": [
-                    {"displayName": "Dark", "value": "dark"},
-                    {"displayName": "Light", "value": "light"}
-                ]}},
-                "followTheme": { "displayName": "Follow report theme", "type": { "bool": true } },
-                "autoFit": { "displayName": "Auto fit", "type": { "bool": true } },
-                "pan": { "displayName": "Pan", "type": { "bool": true } },
-                "zoom": { "displayName": "Zoom", "type": { "bool": true } },
-                "landDark": { "displayName": "Land color (dark)", "type": { "fill": { "solid": { "color": true } } } },
-                "waterDark": { "displayName": "Ocean color (dark)", "type": { "fill": { "solid": { "color": true } } } },
-                "landLight": { "displayName": "Land color (light)", "type": { "fill": { "solid": { "color": true } } } },
-                "waterLight": { "displayName": "Ocean color (light)", "type": { "fill": { "solid": { "color": true } } } },
-                "labelOpacity": { "displayName": "Map label opacity (%)", "type": { "numeric": true } },
-                "relocate": { "displayName": "Relocate points", "description": "Drag/drop to manually change geo-locations", "type": { "bool": true } },
-                "located": { "displayName": "> Show known", "description": "Points with geo-locations", "type": { "bool": true } },
-                "unlocated": { "displayName": "> Show unknown", "description": "Points without geo-locations", "type": { "bool": true } }
+                "style": {
+                    "displayName": "Map style",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "displayName": "Dark",
+                                "value": "dark"
+                            },
+                            {
+                                "displayName": "Light",
+                                "value": "light"
+                            }
+                        ]
+                    }
+                },
+                "followTheme": {
+                    "displayName": "Follow report theme",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "autoFit": {
+                    "displayName": "Auto fit",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "pan": {
+                    "displayName": "Pan",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "zoom": {
+                    "displayName": "Zoom",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "landDark": {
+                    "displayName": "Land color (dark)",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "waterDark": {
+                    "displayName": "Ocean color (dark)",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "landLight": {
+                    "displayName": "Land color (light)",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "waterLight": {
+                    "displayName": "Ocean color (light)",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "labelOpacity": {
+                    "displayName": "Map label opacity (%)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "relocate": {
+                    "displayName": "Relocate points",
+                    "description": "Drag/drop to manually change geo-locations",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "located": {
+                    "displayName": "> Show known",
+                    "description": "Points with geo-locations",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "unlocated": {
+                    "displayName": "> Show unknown",
+                    "description": "Points without geo-locations",
+                    "type": {
+                        "bool": true
+                    }
+                }
             }
         },
         "persist": {
             "displayName": "Value to persist",
             "properties": {
-                "map":{
+                "map": {
                     "displayName": "Persist coding",
-                    "type": { "text": true }
+                    "type": {
+                        "text": true
+                    }
                 },
-                "manual":{
+                "manual": {
                     "displayName": "Persist coding",
-                    "type": { "text": true }
+                    "type": {
+                        "text": true
+                    }
                 },
                 "banner": {
                     "displayName": "Persist for Bubble",
-                    "type": { "text": true }
+                    "type": {
+                        "text": true
+                    }
                 }
             }
         }

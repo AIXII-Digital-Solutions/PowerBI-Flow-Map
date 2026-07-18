@@ -1,20 +1,8 @@
 import { Setting } from '../pbi/numberFormat';
 
 export class Format {
-    legend = {
-        show: true,
-        position: 'top' as 'top' | 'bot',
-        fontSize: 12,
-        color: true,
-        width: true,
-        color_default: false,
-        width_default: false,
-        color_label: '',
-        width_label: ''
-    };
-
-    // "Group legend" card — the collapsible corner legend for the secondary (Color)
-    // grouping (ported from the reference visual). Separate from the old width/scale bar.
+    // The corner legend for the secondary (Color) grouping. Shown in the format pane as
+    // "Legend" (the old top/bottom colour+width bar and its "Legend" card were removed).
     groupLegend = {
         show: true,
         position: 'topLeft' as 'topRight' | 'topLeft' | 'bottomRight' | 'bottomLeft',
@@ -31,16 +19,19 @@ export class Format {
     flow = {
         // style
         // Default to the bundled spider ("flow") so routes merge into shared trunks and
-        // branch out — the route-map look. Users can switch to straight / great-circle.
-        style: 'flow' as 'straight' | 'flow' | 'arc' | 'bundle',
+        // branch out — the route-map look. Users can switch to great-circle / corridors.
+        style: 'flow' as 'flow' | 'arc' | 'bundle',
         direction: 'out' as 'in' | 'out',
+        // Show an on-canvas Origin/Destination switch (default from `direction`).
+        directionControl: false,
         // Bundle by source ON by default: group every route from a hub into shared trunks
         // regardless of the Color field (otherwise a high-cardinality Color splits each hub
         // into single-route spiders → radial). Branches stay individually coloured.
         limit: 10,
         bundleBySource: true,
-        // 50 → 18° spiral angle = the original Weiwei Cui flowmap default (see visual.ts).
-        bundleStrength: 50,
+        // Spiral angle via visual.ts: 50 → 18° (the original flowmap default), 70 → ~21°.
+        // Raised to 70 so nearby routes share ONE trunk further out = less clutter by default.
+        bundleStrength: 70,
         // "Corridors" merge cone (degrees): routes whose directions differ by less than this
         // fuse into shared corridors; smaller = only near-parallel routes merge.
         bundleCone: 40,
@@ -51,6 +42,13 @@ export class Format {
         // colour separately instead of merging all routes into shared corridors.
         bundleSplitColor: false,
         animate: false,
+        // Show an on-canvas button to toggle the animation (default from `animate`).
+        animateControl: false,
+        // Corner each on-canvas button is pinned to (independent, so they never overlap each other).
+        // Defaults are the bottom corners so they clear the legend (top-left) and the Power BI
+        // header chrome (top-right); the user can move either to any corner.
+        directionControlPosition: 'bottomLeft' as 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight',
+        animateControlPosition: 'bottomRight' as 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight',
         // color — distinct palette colour per secondary group by default (autofill on);
         // turn autofill off + set the default colour to make all group lines one colour.
         colorCustomize: true,

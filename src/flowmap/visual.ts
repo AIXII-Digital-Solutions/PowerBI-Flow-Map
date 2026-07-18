@@ -21,7 +21,7 @@ import { GroupLegend } from './grouplegend';
 import { CustomTooltip } from './customtooltip';
 import { setBundleAlpha } from '../lava/flowmap/algo';
 
-type Role = 'Origin' | 'Dest' | 'width' | 'color' | 'OLati' | 'OLong' | 'DLati' | 'DLong' | 'OName' | 'DName' | 'Tooltip' | 'Label';
+type Role = 'Origin' | 'Dest' | 'width' | 'color' | 'OLati' | 'OLong' | 'DLati' | 'DLong' | 'OName' | 'DName' | 'Tooltip' | 'FilterBy';
 type Read<T> = Func<number, T>;
 type Ctx = Context<Role, Format>;
 
@@ -112,7 +112,9 @@ class helper {
     private static _top(ctx: Ctx, rows: number[]) {
         const { sort, top } = ctx.meta.valueFormat, w = app.$state.config.weight.conv;
         if (w) {
-            rows = sort === 'des' ? rows.sort((a, b) => w(b) - w(a)) : rows.sort((a, b) => w(a) - w(b));
+            // Copy first: `rows` is a live model array (pie.rows / path.leafs), and Array.sort
+            // mutates in place — sorting it here would reorder the model as a hover side-effect.
+            rows = sort === 'des' ? rows.slice().sort((a, b) => w(b) - w(a)) : rows.slice().sort((a, b) => w(a) - w(b));
         }
         return +top >= rows.length ? rows : rows.slice(0, +top);
     }
@@ -179,10 +181,9 @@ export class Visual implements IVisual {
         const ctx = this._ctx = new Context(options.host, new Format());
         ctx.fmt.flow.bind('width', "widthItem", "widthCustomize");
         ctx.fmt.flow.bind("color", "colorItem", 'colorCustomize', 'colorAutofill', k => <Fill>{ solid: { color: ctx.palette(k) } });
-        ctx.fmt.legend.bind('width', 'width_label', 'width', 'width_default', '');
-        ctx.fmt.legend.bind('color', 'color_label', 'color', 'color_default', '');
+        this._buildMapControls();
         app.events.flow.pathInited = group => {
-            group.on('mouseover.tip', (arg: any) => this._showTip(helper.pathTooltip(this._ctx, arg.leafs as number[], ctx.meta.flow.direction)))
+            group.on('mouseover.tip', (arg: any) => this._showTip(helper.pathTooltip(this._ctx, arg.leafs as number[], this._cfg ? this._cfg.direction : ctx.meta.flow.direction)))
                 .on('mousemove.tip', () => this._moveTip())
                 .on('mouseout.tip', () => this._tip.hide())
                 .on('click', (p: any) => this._onMarkClick(p.leafs as number[]));
@@ -192,12 +193,37 @@ export class Visual implements IVisual {
             persist.manual.value({})[addr] = this._cfg.injections[addr] = loc;
         };
         app.events.pie.onPieCreated = group => {
-            group.on('mouseover.tip', (arg: any) => this._showTip(helper.pieTooltip(arg.rows, arg.type, this._ctx)))
+            group.on('mouseover.tip', (arg: any) => { this._showTip(helper.pieTooltip(arg.rows, arg.type, this._ctx)); })
                 .on('mousemove.tip', () => this._moveTip())
                 .on('mouseout.tip', () => this._tip.hide())
-                .on('click', (p: any) => this._onMarkClick(p.rows as number[]));
+                // The browser does not always generate a 'click' on a bubble — the SVG node can be
+                // rebuilt (reshape) between mousedown and mouseup, which cancels the synthetic click.
+                // mousedown+mouseup always fire, so detect the click ourselves: same bubble, pointer
+                // barely moved between press and release → treat as a click.
+                .on('mousedown.sel', (p: any) => {
+                    const e = d3event as MouseEvent;
+                    this._pieDownAddr = p && p.addr;
+                    this._pieDownX = e ? e.clientX : 0;
+                    this._pieDownY = e ? e.clientY : 0;
+                })
+                // Click a hub bubble → select EVERY route touching that location (its
+                // departures AND arrivals), not just this bubble's single direction.
+                .on('mouseup.sel', (p: any) => {
+                    const e = d3event as MouseEvent;
+                    const addr = p && p.addr;
+                    const wasDown = this._pieDownAddr;
+                    this._pieDownAddr = null;
+                    if (!addr || addr !== wasDown) { return; }
+                    const moved = e ? Math.abs(e.clientX - this._pieDownX) + Math.abs(e.clientY - this._pieDownY) : 0;
+                    if (moved > 6) { return; } // a drag that happened to end on this bubble, not a click
+                    this._onMarkClick(app.hubRows(addr));
+                });
         };
     }
+
+    private _pieDownAddr: string = null;
+    private _pieDownX = 0;
+    private _pieDownY = 0;
 
     /** Click on a flow/bubble → cross-filter its rows and dim the rest (Ctrl/Shift = add). */
     private _onMarkClick(rows: number[]): void {
@@ -259,6 +285,104 @@ export class Visual implements IVisual {
         this._target && this._target.classList.toggle('flowmap-dark', dark);
     }
 
+    // -------- on-canvas Group-by / Animate controls --------
+    // Two INDEPENDENT controls, each pinned to its own corner, built OUTSIDE the Leaflet container
+    // (siblings of the map) so the map cannot swallow their clicks. Each click persists its setting,
+    // so it survives a report reload and the format pane stays in sync. Same panel/height/font as
+    // the corner legend and the zoom control.
+    private _dirCtl: HTMLDivElement = null;
+    private _animCtl: HTMLDivElement = null;
+    private _dirButtons: { [k in 'out' | 'in']?: HTMLButtonElement } = {};
+    private _animBtn: HTMLButtonElement = null;
+
+    private _buildMapControls(): void {
+        if (this._dirCtl || !this._target) { return; }
+
+        // Group-by: a two-segment Origin / Destination switch.
+        const dir = this._dirCtl = document.createElement('div');
+        dir.className = 'flowmap-map-control flowmap-dir-control';
+        dir.style.display = 'none'; // hidden until _syncMapControls decides, so it never flashes
+        const dirDefs: Array<['out' | 'in', string]> = [['out', 'Origin'], ['in', 'Destination']];
+        for (const [val, label] of dirDefs) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = label;
+            btn.onclick = e => {
+                e.stopPropagation();
+                this._ctx.persist('flow', 'direction', val); // reset rebuilds the trees with the new hub
+            };
+            this._dirButtons[val] = btn;
+            dir.appendChild(btn);
+        }
+        this._target.appendChild(dir);
+
+        // Animate: a single on/off toggle.
+        const anim = this._animCtl = document.createElement('div');
+        anim.className = 'flowmap-map-control flowmap-anim-control';
+        anim.style.display = 'none';
+        const btn = this._animBtn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'Animate';
+        btn.onclick = e => {
+            e.stopPropagation();
+            this._ctx.persist('flow', 'animate', !this._ctx.config('flow', 'animate'));
+        };
+        anim.appendChild(btn);
+        this._target.appendChild(anim);
+    }
+
+    private static _CORNERS = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
+    /** Pin a control to a corner via inline styles (top/bottom + left/right). `off` is the distance
+     *  from the horizontal edge — computed so the control clears whatever already sits there. */
+    private _placeInline(el: HTMLElement, top: boolean, left: boolean, off: number): void {
+        el.style.top = top ? '10px' : '';
+        el.style.bottom = top ? '' : '28px';
+        el.style.left = left ? off + 'px' : '';
+        el.style.right = left ? '' : off + 'px';
+    }
+
+    /** Sync each on-canvas control's visibility, corner and active state. Controls that land on the
+     *  same corner as the legend (or as each other) are pushed SIDEWAYS so nothing overlaps. */
+    private _syncMapControls(): void {
+        if (!this._dirCtl) { return; }
+        const ctx = this._ctx;
+        const dark = app.$state.mapctl ? app.$state.mapctl.format.style !== 'light' : true;
+        const dirShown = !!ctx.config('flow', 'directionControl');
+        const animShown = !!ctx.config('flow', 'animateControl');
+        this._dirCtl.style.display = dirShown ? '' : 'none';
+        this._animCtl.style.display = animShown ? '' : 'none';
+        this._dirCtl.classList.toggle('flowmap-control-dark', dark);
+        this._animCtl.classList.toggle('flowmap-control-dark', dark);
+
+        if (dirShown || animShown) {
+            const dirPos = (ctx.config('flow', 'directionControlPosition') as string) || 'bottomLeft';
+            const animPos = (ctx.config('flow', 'animateControlPosition') as string) || 'bottomRight';
+            // Is the corner legend currently on screen, and where + how wide? A shown control at its
+            // corner starts just past it.
+            const legendEl = this._target.querySelector('.flowmap-legend') as HTMLElement;
+            const legendVisible = !!legendEl && legendEl.offsetParent !== null;
+            const legendPos = legendVisible ? ((ctx.config('groupLegend', 'position') as string) || 'topLeft') : null;
+            const legendW = legendVisible ? legendEl.offsetWidth : 0;
+            const dirW = dirShown ? this._dirCtl.offsetWidth : 0;   // offsetWidth needs display != none (set above)
+            const animW = animShown ? this._animCtl.offsetWidth : 0;
+            const GAP = 8;
+            for (const corner of Visual._CORNERS) {
+                const left = corner === 'topLeft' || corner === 'bottomLeft';
+                const top = corner === 'topLeft' || corner === 'topRight';
+                // topLeft base clears the zoom control; the legend always sits at 44 (left) / 12 (right).
+                let cursor = left ? (corner === 'topLeft' ? 44 : 12) : 12;
+                if (legendPos === corner) { cursor = (left ? 44 : 12) + legendW + GAP; }
+                if (dirShown && dirPos === corner) { this._placeInline(this._dirCtl, top, left, cursor); cursor += dirW + GAP; }
+                if (animShown && animPos === corner) { this._placeInline(this._animCtl, top, left, cursor); cursor += animW + GAP; }
+            }
+        }
+
+        const dir = this._cfg ? this._cfg.direction : ctx.config('flow', 'direction');
+        this._dirButtons.out && this._dirButtons.out.classList.toggle('active', dir === 'out');
+        this._dirButtons.in && this._dirButtons.in.classList.toggle('active', dir === 'in');
+        this._animBtn && this._animBtn.classList.toggle('active', !!ctx.config('flow', 'animate'));
+    }
+
     /** Rebuild the corner group legend from the current secondary (Color) grouping. */
     private _updateLegend(): void {
         if (!this._groupLegend) {
@@ -278,13 +402,16 @@ export class Visual implements IVisual {
         const cat = ctx.cat('color');
         if (!cat || ctx.type('color').numeric || !ctx.meta.flow.colorCustomize) {
             this._groupLegend.update([], opts, new Set<string>());
-            return;
         }
-        const colorFn = ctx.fmt.flow.item('colorItem');
-        const rows = cat.distincts();
-        const labels = cat.row2label(rows);
-        const groups = rows.map(r => ({ key: cat.key(r), color: colorFn(r) + '', label: (labels[r] || '') + '' }));
-        this._groupLegend.update(groups, opts, this._selGroups);
+        else {
+            const colorFn = ctx.fmt.flow.item('colorItem');
+            const rows = cat.distincts();
+            const labels = cat.row2label(rows);
+            const groups = rows.map(r => ({ key: cat.key(r), color: colorFn(r) + '', label: (labels[r] || '') + '' }));
+            this._groupLegend.update(groups, opts, this._selGroups);
+        }
+        // After the legend set its own display/position — so controls can dodge it sideways.
+        this._syncMapControls();
     }
 
     /** Click a legend row → cross-filter that group (plain / Ctrl toggle / re-click clears). */
@@ -311,8 +438,29 @@ export class Visual implements IVisual {
         const rows = ctx.rows().filter(r => groups.has(cat.key(r)));
         this._selRows = rows;
         app.highlight(rows);
-        this._selectionManager.select(this._rowIds(rows), false);
+        // Cross-filter by the COLOR group itself — one selection id per legend group — not by
+        // every (Origin,Dest) pair in it. A big group holds thousands of pairs; passing thousands
+        // of ids to selectionManager.select made the Power BI host (not just the map) hang while it
+        // serialized and applied them. One id per group filters the same rows near-instantly.
+        this._selectionManager.select(this._groupSelectionIds(groups, cat), false);
         this._groupLegend.refreshSelected(groups);
+    }
+
+    /** One selection id per selected legend group, built from the Color category — so clicking a
+     *  legend row cross-filters by that colour value with a single id per group instead of one per
+     *  route. Picks the first row of each group as the representative. */
+    private _groupSelectionIds(groups: Set<string>, cat: { column: any, key: (r: number) => string }): powerbi.visuals.ISelectionId[] {
+        const ctx = this._ctx;
+        if (!cat || !cat.column) { return []; }
+        const ids = [] as powerbi.visuals.ISelectionId[];
+        const seen = {} as StringMap<boolean>;
+        for (const r of ctx.rows()) {
+            const k = cat.key(r);
+            if (!groups.has(k) || seen[k]) { continue; }
+            seen[k] = true;
+            ids.push(ctx.host.createSelectionIdBuilder().withCategory(cat.column, r).createSelectionId());
+        }
+        return ids;
     }
 
     /** Composite (Origin, Dest) selection id for a row — filters that exact O→D pair. */
@@ -325,48 +473,38 @@ export class Visual implements IVisual {
         return b.createSelectionId();
     }
 
+    /** (Origin,Dest) -> selection id, cached. Clicking a thick trunk means hundreds of distinct
+     *  pairs, and rebuilding a selection id for each one on every click is what made selecting
+     *  stutter. The Origin/Dest column object is the cache token: Power BI hands over fresh
+     *  columns with each new dataView, so the cache self-invalidates and never returns a stale id. */
+    private _idCache = {} as StringMap<powerbi.visuals.ISelectionId>;
+    private _idCacheToken: any = null;
+    private _idCacheTokenD: any = null;
+
     private _rowIds(rows: number[]): powerbi.visuals.ISelectionId[] {
         const ctx = this._ctx;
-        const ok = ctx.cat('Origin') ? ctx.cat('Origin').key : (_: number) => '';
-        const dk = ctx.cat('Dest') ? ctx.cat('Dest').key : (_: number) => '';
+        const oCat = ctx.cat('Origin'), dCat = ctx.cat('Dest');
+        // Invalidate if EITHER column object changed — keying only on Origin would keep stale ids
+        // built against an old Dest column if Power BI swapped just that one.
+        const oTok = (oCat && oCat.column) || null, dTok = (dCat && dCat.column) || null;
+        if (this._idCacheToken !== oTok || this._idCacheTokenD !== dTok) {
+            this._idCache = {};
+            this._idCacheToken = oTok;
+            this._idCacheTokenD = dTok;
+        }
+        const ok = oCat ? oCat.key : (_: number) => '';
+        const dk = dCat ? dCat.key : (_: number) => '';
         const seen = {} as StringMap<boolean>;
         const ids = [] as powerbi.visuals.ISelectionId[];
         for (const r of rows) {
             const k = ok(r) + '' + dk(r);
             if (seen[k]) { continue; }
             seen[k] = true;
-            ids.push(this._rowId(r));
+            let id = this._idCache[k];
+            if (!id) { id = this._idCache[k] = this._rowId(r); }
+            ids.push(id);
         }
         return ids;
-    }
-
-    private _buildLegendLabels(role: 'color' | 'width'): StringMap<string> {
-        const ctx = this._ctx, legend = ctx.fmt.legend;
-        const autofill = role === 'color' ? 'color_default' : 'width_default';
-        const label = role === 'color' ? 'color_label' : 'width_label';
-        const itemProp = role === 'color' ? 'colorItem' : 'widthItem';
-        const custProp = role === 'color' ? 'colorCustomize' : 'widthCustomize';
-        if (!legend.config(role)) {
-            return {};//hide
-        }
-        const cat = ctx.cat(role);
-        if (!cat || !ctx.meta.flow[custProp]) {
-            const txt = (legend.config(label) || '').trim();
-            return txt ? { [ctx.config('flow', itemProp)]: txt } : {};
-        }
-        else if (cat.type.numeric) {
-            return null;//smooth
-        }
-        else {
-            //has cat && distinct
-            const labels = ctx.labels(ctx.binding('flow', itemProp), legend.special(label));
-            if (legend.config(autofill)) {
-                return dict(labels, r => r.key, r => r.value || r.name);
-            }
-            else {
-                return dict(labels.filter(a => a.value), r => r.key, r => r.value);
-            }
-        }
     }
 
     /** Build the Leaflet/MapLibre basemap format from the "map" settings object,
@@ -402,11 +540,13 @@ export class Visual implements IVisual {
 
     private _config(): app.Config {
         const config = new app.Config(), ctx = this._ctx;
-        /* #region  legend */
-        override(ctx.meta.legend, config.legend);
-        config.legend.colorLabels = this._buildLegendLabels('color');
-        config.legend.widthLabels = this._buildLegendLabels('width');
-        /* #endregion */
+        // The top/bottom colour+width legend bar was removed; the Legend class now only renders
+        // error/issue text. Force its colour/width bars off and keep it anchored to the top.
+        config.legend.color = false;
+        config.legend.width = false;
+        config.legend.position = 'top';
+        config.legend.colorLabels = {};
+        config.legend.widthLabels = {};
 
         /* #region  numberSorter, numberFormat */
         override(ctx.meta.valueFormat, config.numberSorter);
@@ -420,11 +560,11 @@ export class Visual implements IVisual {
             config.error = '"Destination" field is required.'
         }
 
-        /* #region  source, target, label */
+        /* #region  source, target */
         config.source = ctx.key('Origin');
         config.target = ctx.key('Dest');
         config.popup = {
-            description: helper.description('Label', ctx),
+            description: null,
             origin: ctx.cat('OName') ? ctx.key('OName') : config.source,
             destination: ctx.cat('DName') ? ctx.key('DName') : config.target
         };
@@ -432,8 +572,26 @@ export class Visual implements IVisual {
         let sourceRole = 'Origin' as Role;
         let groups = null as number[][];
 
+        /* #region grouping direction + limit (from settings) */
+        const direction = ctx.meta.flow.direction;
+        config.direction = direction;
+        const limit = +ctx.meta.flow.limit;
+        // "Filter by" field: restrict the map to the routes it marks, BEFORE grouping — a measure
+        // that returns BLANK for unwanted pairs drops them; a plain column (e.g. City Pairs) has a
+        // value on every row it survives with, so it simply carries the report's filter context.
+        let baseRows = ctx.rows();
+        const fCat = ctx.cat('FilterBy');
+        if (fCat && fCat.column) {
+            const fv = fCat.data;
+            baseRows = baseRows.filter(r => {
+                const v = fv[r];
+                return v !== null && v !== undefined && v !== '' && v !== false;
+            });
+        }
+        /* #endregion */
+
         //swith source/target
-        if (ctx.meta.flow.direction === 'in') {
+        if (direction === 'in') {
             [config.source, config.target] = [config.target, config.source];
             sourceRole = 'Dest';
         }
@@ -484,21 +642,21 @@ export class Visual implements IVisual {
         config.bundle.splitColor = !!ctx.meta.flow.bundleSplitColor;
         if (config.style === null) {
             if (config.color.max) {
-                config.style = ctx.rows().length < 512 ? 'arc' : 'straight';
+                config.style = baseRows.length < 512 ? 'arc' : 'straight';
             }
             else {
-                groups = values(groupBy(ctx.rows(), (bySource ? ctx.key(sourceRole) : ctx.key(sourceRole, 'color'))));
-                if (keys(groups).length <= ctx.meta.flow.limit) {
+                groups = values(groupBy(baseRows, (bySource ? ctx.key(sourceRole) : ctx.key(sourceRole, 'color'))));
+                if (keys(groups).length <= limit) {
                     config.style = 'flow';
                 }
                 else {
-                    config.style = ctx.rows().length < 512 ? 'arc' : 'straight';
+                    config.style = baseRows.length < 512 ? 'arc' : 'straight';
                 }
             }
         }
         else if (config.style === 'flow') {
             if (config.color.max) {
-                config.style = ctx.rows().length < 512 ? 'arc' : 'straight';
+                config.style = baseRows.length < 512 ? 'arc' : 'straight';
             }
         }
         /* #endregion */
@@ -541,12 +699,12 @@ export class Visual implements IVisual {
         /* #endregion */
 
         /* #region  collect groups and valid rows */
-        let rows = ctx.rows();
+        let rows = baseRows;
         if (config.style === 'bundle') {
             // Corridors: one global edge set (or one per colour when "keep colours apart").
             // Cap the edge count so the O(E^2) bundling stays responsive.
             const BUNDLE_CAP = 450;
-            let brows = ctx.rows().slice();
+            let brows = baseRows.slice();
             if (brows.length > BUNDLE_CAP) {
                 brows = sort(brows, r => -config.weight.conv(r)).slice(0, BUNDLE_CAP);
             }
@@ -560,19 +718,19 @@ export class Visual implements IVisual {
         }
         else if (config.style === 'flow') {
             if (!groups) {
-                groups = values(groupBy(ctx.rows(), (bySource ? ctx.key(sourceRole) : ctx.key(sourceRole, 'color'))));
+                groups = values(groupBy(baseRows, (bySource ? ctx.key(sourceRole) : ctx.key(sourceRole, 'color'))));
             }
             const weights = groups.map(g => sum(g, i => config.weight.conv(i)));
             // Heaviest first, so the Limit keeps the BUSIEST hubs (the original sorted ascending
             // and kept the lightest — which hides the dominant hub on multi-origin data).
             groups = sort(groups, (_, i) => -weights[i]);
-            if (ctx.meta.flow.limit < groups.length) {
-                groups = groups.slice(0, ctx.meta.flow.limit);
+            if (limit < groups.length) {
+                groups = groups.slice(0, limit);
                 rows = [].concat(...groups);
             }
         }
         else {
-            groups = values(groupBy(ctx.rows(), ctx.key(sourceRole)));
+            groups = values(groupBy(baseRows, ctx.key(sourceRole)));
         }
         /* #endregion */
 
@@ -620,6 +778,12 @@ export class Visual implements IVisual {
         if (this._initing) {
             return;
         }
+        // A dataView without metadata/categorical (Power BI can send one during teardown or an
+        // error state) would make Context.update dereference missing fields and throw, killing
+        // the whole render. Nothing to draw — skip this cycle.
+        if (!view.metadata || !view.categorical) {
+            return;
+        }
         const ctx = this._ctx.update(view);
         const reset = (config: app.Config) => app.reset(config, () => ctx.meta.map.autoFit && app.tryFitView());
         if (!this._inited) {
@@ -644,12 +808,16 @@ export class Visual implements IVisual {
                 this._updateLegend();
             });
             this._inited = true;
+            this._dataChanged(view); // prime the baseline so the first selection echo is a no-op
         }
         else {
             if (ctx.isResizeVisualUpdateType(options)) {
                 return;
             }
             const config = this._cfg = this._config(), fmt = ctx.fmt;
+            // Refresh the data fingerprint every update (not only in the else branch) so that after
+            // a format-driven reset the next selection echo still compares equal and is skipped.
+            const dataChanged = this._dataChanged(view);
             // followTheme: a runtime report-theme change does NOT mark the "map" object
             // dirty (the theme comes from host.colorPalette, not metadata.objects.map), so
             // push the freshly theme-derived basemap style whenever it actually changed.
@@ -679,9 +847,7 @@ export class Visual implements IVisual {
                 if (fmt.valueFormat.dirty()) {
                     app.repaint(config, 'banner');
                 }
-                if (fmt.legend.dirty()) {
-                    app.repaint(config, 'legend');
-                }
+                // groupLegend changes are picked up by the unconditional _updateLegend() below.
                 if (fmt.map.dirty(['style', 'followTheme', 'pan', 'zoom', 'landDark', 'waterDark', 'landLight', 'waterLight', 'labelOpacity', 'autoFit'])) {
                     if (fmt.map.dirty(['style', 'followTheme', 'pan', 'zoom', 'landDark', 'waterDark', 'landLight', 'waterLight', 'labelOpacity'])) {
                         app.repaint(config, 'map');
@@ -689,11 +855,43 @@ export class Visual implements IVisual {
                     fmt.map.dirty('autoFit') === 'on' && app.tryFitView();
                 }
             }
-            else {
+            else if (this._dataChanged(view)) {
+                // No format object is dirty and the underlying data actually changed (a slicer or
+                // page filter added/removed rows) — rebuild the trees for the new data.
                 reset(config);
+            }
+            else {
+                // Data and format are both unchanged, so this update is only the echo of a
+                // selection/cross-filter (our own or another visual's) or a cosmetic re-run.
+                // Rebuilding every spiral tree here was pure waste and, for a big legend-group
+                // selection, took long enough to look like a hang. Keep the current render and
+                // just re-assert our local highlight so it survives the echo.
+                this._selRows && app.highlight(this._selRows);
             }
             this._updateLegend();
         }
+    }
+
+    /** Cheap structural+content fingerprint of the dataView, to tell a real data change (rows
+     *  added/removed by a slicer) apart from a selection/highlight echo that carries identical
+     *  data. Samples a few values per column so it is O(columns), not O(rows). */
+    private _dataSig: string = null;
+    private _dataChanged(view: powerbi.DataView): boolean {
+        const cat = view && view.categorical;
+        let sig = '';
+        if (cat) {
+            const cols = ([] as any[]).concat(cat.categories || [], cat.values || []);
+            const n = (cat.categories && cat.categories[0] && cat.categories[0].values.length) || 0;
+            sig = n + '|';
+            for (const c of cols) {
+                const vals = c.values || [];
+                const qn = (c.source && c.source.queryName) || '';
+                sig += qn + ':' + vals.length + ':' + vals[0] + ',' + vals[vals.length >> 1] + ',' + vals[vals.length - 1] + ';';
+            }
+        }
+        const changed = sig !== this._dataSig;
+        this._dataSig = sig;
+        return changed;
     }
 
     public enumerateObjectInstances(options: EnumerateVisualObjectInstancesOptions): VisualObjectInstance[] {
@@ -710,19 +908,17 @@ export class Visual implements IVisual {
                 return fmt.map.dumper()
                     .metas(['style', 'followTheme', 'autoFit', 'pan', 'zoom', 'landDark', 'waterDark', 'landLight', 'waterLight', 'labelOpacity', 'relocate'])
                     .result;
-            case 'legend':
-                return fmt.legend.dumper()
-                    .metas(['show', 'position', 'fontSize'])
-                    .labels(fmt.flow.binding('colorItem'), 'color_label')
-                    .labels(fmt.flow.binding('widthItem'), 'width_label', d => d.metas(['width']))
-                    .result;
             case 'flow': {
                 const d = fmt.flow.dumper();
-                // style / grouping
-                d.metas(['style'], cfg)
-                    .metas(cfg.style === 'flow', ['direction', 'limit', 'bundleBySource', 'bundleStrength'])
-                    .metas(cfg.style === 'bundle', ['direction', 'bundleStrength', 'bundleCone', 'bundleRadius', 'bundleSplitColor']);
-                d.metas(['animate']);
+                // style / grouping. directionControl toggles the on-canvas Origin/Destination switch;
+                // its position dropdown appears only once the switch is turned on.
+                const groupingStyle = cfg.style === 'flow' || cfg.style === 'bundle';
+                d.metas(['style'], cfg as any) // cfg.style may be the internal 'straight' fallback
+                    .metas(cfg.style === 'flow', ['direction', 'directionControl', 'limit', 'bundleBySource', 'bundleStrength'])
+                    .metas(cfg.style === 'bundle', ['direction', 'directionControl', 'bundleStrength', 'bundleCone', 'bundleRadius', 'bundleSplitColor']);
+                d.metas(groupingStyle && !!ctx.meta.flow.directionControl, ['directionControlPosition']);
+                d.metas(['animate', 'animateControl']);
+                d.metas(!!ctx.meta.flow.animateControl, ['animateControlPosition']);
                 // color
                 d.metas(['colorItem']);
                 if (ctx.cat('color')) {
@@ -764,8 +960,9 @@ export class Visual implements IVisual {
                     if (ctx.meta.bubble.label !== 'hide' && ctx.meta.bubble.label !== 'none') {
                         const both = ctx.meta.bubble.for === 'both';
                         bubble.metas(['labelOpacity'])
-                            .metas(both || cfg.bubble.for === 'dest', ['labelColor'])
-                            .metas(both || cfg.bubble.for === 'origin', ['labelColor'])
+                            // Emit labelColor ONCE — the old two-line form added it twice when
+                            // for==='both', producing a duplicate row in the format pane.
+                            .metas(both || cfg.bubble.for === 'dest' || cfg.bubble.for === 'origin', ['labelColor'])
                     }
                 }
                 return bubble.result;

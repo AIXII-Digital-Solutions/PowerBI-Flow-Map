@@ -10,7 +10,12 @@ export class Config {
         located: true,
         unlocated: true
     };
+    // 'straight' is NOT a user-selectable Type (removed from the UI) — it stays only as the
+    // cheap internal fallback for large datasets, where rendering every route as an arc is slow.
     style = null as 'straight' | 'flow' | 'arc' | 'bundle';
+    /** Effective grouping end: 'out' = group by Origin, 'in' = group by Destination. Resolved
+     *  from the GroupBy field when supplied, else the Group by setting. */
+    direction = 'out' as 'in' | 'out';
     bundleBySource = false;
     // "Corridors" mean-attraction edge-bundling parameters (see lava/flowmap/bundle.ts),
     // filled from the Bundle strength / Merge cone / Merge radius settings.

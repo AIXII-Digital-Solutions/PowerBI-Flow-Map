@@ -38,15 +38,59 @@ class VisualFlow {
     }
 
     remove() {
+        // Kill any pending hover timer — otherwise it fires after teardown and calls
+        // events.hover() with row indices from the destroyed layout.
+        if (this._hoverTimer) {
+            clearTimeout(this._hoverTimer);
+            this._hoverTimer = null;
+        }
         this._tRoot.remove();
     }
 
-    dim(d: boolean) {
-        this._tRoot.classed('dimmed', d);
+    /** Highlight ONE route rather than the whole spider: a route is exactly the set of path
+     *  segments whose `leafs` contain a selected row — i.e. its branch plus the trunk chain it
+     *  travels back to the hub. Every other segment (sibling branches, unrelated trunks) dims,
+     *  so clicking a branch shows that single origin→destination path.
+     *
+     *  Kept cheap on purpose: a spider that holds none of the selection dims as ONE group node,
+     *  so only the flow the route actually runs through pays any per-segment cost. Selections
+     *  touch only the visible `.base` paths (never the invisible `.hit` twins).
+     */
+    public highlight(set: { has(v: number): boolean } | null) {
+        if (!set) {
+            this._tRoot.classed('dimmed', false);
+            this._undimPaths();
+            return;
+        }
+        if (!this.rows.some(r => set.has(r))) {
+            this._tRoot.classed('dimmed', true);   // one write for the whole spider
+            this._undimPaths();
+            return;
+        }
+        this._tRoot.classed('dimmed', false);
+        const base = this._base();
+        if (base) {
+            base.classed('dimmed', p => !(p.leafs as number[]).some(l => set.has(+l)));
+            this._pathsDimmed = true;
+        }
     }
 
-    select(s: boolean) {
-        this._tRoot.classed('selected', s);
+    /** Visible paths of this flow, cached — re-querying the DOM on every click is what made
+     *  select/clear feel sluggish. Invalidated on relayout. */
+    private _basePaths: ISelex<IPath> = null;
+    private _pathsDimmed = false;
+    private _base(): ISelex<IPath> {
+        if (!this._basePaths && this._shape) {
+            this._basePaths = this._sRoot.selectAll<IPath>('.base');
+        }
+        return this._basePaths;
+    }
+    private _undimPaths(): void {
+        if (this._pathsDimmed) {
+            const base = this._base();
+            base && base.classed('dimmed', false);
+            this._pathsDimmed = false;
+        }
     }
 
     public reformat(recolor: boolean, rewidth: boolean) {
@@ -112,6 +156,8 @@ class VisualFlow {
 
     private _relayout() {
         this._shape = this._build();
+        this._basePaths = null;      // paths were re-created — drop the cached selection
+        this._pathsDimmed = false;
         if (!this._shape) {
             return;
         }
@@ -158,7 +204,9 @@ export function init(d3: ISelex): IListener {
     return {
         transform: (ctl, pzoom) => {
             flows.forEach(v => v.transform(ctl.map, pzoom));
-            remask();
+            // remask() intentionally NOT called here: the hit-mask rect only depends on the
+            // viewport size, which is unchanged during pan/zoom — rewriting its 6 attributes
+            // (each a Leaflet getSize() read) every move frame was pure waste. Only resize changes it.
         },
         resize: () => remask()
     }
@@ -198,19 +246,10 @@ export function reformat(recolor: boolean, rewidth: boolean) {
     }
 }
 
-/** Dim every flow whose rows are not in `rows` (null/empty restores all to full opacity). */
+/** Dim every path segment that is not part of a selected route (null/empty restores all). */
 export function highlight(rows: number[] | null) {
-    if (!rows || rows.length === 0) {
-        for (const v of flows) {
-            v.dim(false);
-            v.select(false);
-        }
-        return;
-    }
-    const set = new Set<number>(rows);
+    const set = rows && rows.length ? new Set<number>(rows) : null;
     for (const v of flows) {
-        const hit = v.rows.some(r => set.has(r));
-        v.dim(!hit);
-        v.select(hit);
+        v.highlight(set);
     }
 }

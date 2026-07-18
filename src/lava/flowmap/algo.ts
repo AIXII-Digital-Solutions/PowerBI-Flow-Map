@@ -1135,17 +1135,23 @@ export function layout(source: IPoint, targets: IPoint[], weights?: number[]): I
         constructor(src: IPoint, tars: IPoint[], weight?: Func<number, number>) {
             let mark = {} as StringMap<true>;
             mark[src.x + ',' + src.y] = true;
-            let smallx = delta(tars, t => t.x) / 100000;
-            let smally = delta(tars, t => t.y) / 100000;
-            // Deterministic tie-breaker jitter for coincident targets (Math.random is
-            // blocked by the visual linter and the exact values here are irrelevant).
+            // Jitter step for separating coincident targets. A Color field produces many rows
+            // with the SAME (source, destination), so a whole group can collapse to one point;
+            // then delta() is 0, smallx/smally are 0, the jitter below adds nothing, and the
+            // `while (key in mark)` loop spins forever and hangs the visual. Floor the step to a
+            // non-zero value so coincident points always separate.
+            const base = Math.max(delta(tars, t => t.x), delta(tars, t => t.y), 1) / 100000;
+            let smallx = base, smally = base;
+            // Deterministic tie-breaker (Math.random is blocked by the visual linter and the
+            // exact values here are irrelevant).
             let seed = 1;
             const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
             for (let t of tars) {
                 let key = t.x + ',' + t.y;
-                while (key in mark) {
-                    t.x += smallx * rnd();
-                    t.y += smally * rnd();
+                let guard = 0;
+                while (key in mark && guard++ < 10000) {
+                    t.x += smallx * (rnd() + 1e-3);
+                    t.y += smally * (rnd() + 1e-3);
                     key = t.x + ',' + t.y;
                 }
                 mark[key] = true;

@@ -114,6 +114,12 @@ function queue(groups: number[][], then: Action) {
   for (const flow of groups) {
     addGroup(flow);
   }
+  if ($state.config.advance.relocate) {
+    pins.reset(rawGroups);
+  }
+  else {
+    finalizeGroups();
+  }
   legend.info(null);
   if (events.doneGeocoding) {
     events.doneGeocoding($state.geocode);
@@ -126,6 +132,11 @@ function queue(groups: number[][], then: Action) {
 export function highlight(rows: number[] | null) {
   flows.highlight(rows);
   pies.highlight(rows);
+}
+
+/** All routes connected to a hub location (its departures + arrivals) — for hub clicks. */
+export function hubRows(addr: string): number[] {
+  return pies.connected(addr);
 }
 
 export function reset(cfg: Config, then?: Action) {
@@ -180,8 +191,7 @@ let allValids = [] as number[];
 function addGroup(group: number[]) {
   rawGroups.push(group);
   if ($state.config.advance.relocate) {
-    pins.reset(rawGroups);
-    return;
+    return; // pins are placed once in queue(), not per group
   }
   // In "Corridors" (bundle) mode every row is its own edge with its own source, so the
   // usual shared-source check per group does not apply — validate source per row instead.
@@ -216,6 +226,12 @@ function addGroup(group: number[]) {
     }
   }
   flows.add(groupValid);
+}
+
+/** Colour/width/legend/bubbles once ALL groups exist. Previously this ran inside addGroup, i.e.
+ *  once PER group inside the queue() loop — reformatting every flow and rebuilding every bubble
+ *  N times for N groups (the main cause of the slow rebuild). Run it a single time instead. */
+function finalizeGroups() {
   resetColor();
   resetWidth();
   flows.reformat(true, true);

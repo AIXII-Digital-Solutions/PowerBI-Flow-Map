@@ -104,6 +104,7 @@ interface GLMap {
   setPaintProperty: (id: string, prop: string, value: unknown) => void;
   setLayoutProperty: (id: string, prop: string, value: unknown) => void;
   on: (ev: string, cb: () => void) => void;
+  off: (ev: string, cb: () => void) => void;
 }
 type GLLayer = L.Layer & { getMaplibreMap: () => GLMap };
 
@@ -132,6 +133,8 @@ export class Controller {
   private _listener = [] as IListener[];
   private _zoom = 2;
   private _applyTimers: number[] = [];
+  private _basemapApplied = false;
+  private _fontsApplied = false;
   private _styleControl: HTMLElement = null;
   private _styleButtons = {} as Record<MapStyle, HTMLButtonElement>;
 
@@ -169,6 +172,13 @@ export class Controller {
     this._canvas = config(selex(this._overlay).append('canvas'));
     this._svg = config(selex(this._overlay).append('svg'));
     this._svgroot = this._svg.append('g').att.id('root');
+    // The overlay is a child of Leaflet's map container, so Leaflet's map-level drag/click
+    // handlers see mousedown/click on our interactive shapes (flows, bubbles) first and can
+    // swallow them — hover (mouseover) still fires, but 'click' never reaches the shape's
+    // handler. Stop click/scroll from propagating up to the map so shape clicks work, exactly
+    // as the style control does. Empty-map clicks still reach the map (overlay is pointer-none).
+    L.DomEvent.disableClickPropagation(this._svg.node() as HTMLElement);
+    L.DomEvent.disableScrollPropagation(this._svg.node() as HTMLElement);
 
     this._shim = this._buildShim();
   }
@@ -339,6 +349,17 @@ export class Controller {
     });
     this._gl.addTo(map);
     this._gl.getMaplibreMap().on('style.load', () => this._scheduleApply());
+    // Fixed retry timers can all elapse before a slow CDN style finishes loading, leaving the
+    // stock CARTO colours ("style sometimes not applied"). 'idle' fires once the map has fully
+    // loaded and rendered — re-apply then if the timers missed, so the recolour always lands.
+    // Self-detach the moment it succeeds so it adds zero cost on every later idle (pan/zoom).
+    const gl = this._gl.getMaplibreMap();
+    const onIdle = () => {
+      if (this._basemapApplied) { gl.off('idle', onIdle); return; }
+      this._applyBasemap();
+      if (this._basemapApplied) { gl.off('idle', onIdle); }
+    };
+    gl.on('idle', onIdle);
 
     // Overlay lives inside the Leaflet container but outside the transformed map-pane,
     // below the zoom control (z 1000) and above the basemap. Painted flow paths capture
@@ -405,6 +426,8 @@ export class Controller {
     this._fmt.style = style;
     if (this._gl) {
       try {
+        this._basemapApplied = false; // new style → recolour must be re-applied
+        this._fontsApplied = false;   // new style → labels must be re-fonted once
         this._gl.getMaplibreMap().setStyle(STYLE_URLS[theme]);
       } catch {
         /* GL map not ready — the style.load binding re-applies on load */
@@ -442,7 +465,11 @@ export class Controller {
         gl.setPaintProperty(id, 'background-color', land);
       } else if (type === 'symbol') {
         try {
-          gl.setLayoutProperty(id, 'text-font', [GLYPH_FONTSTACK]);
+          // setLayoutProperty('text-font') forces a full label RE-LAYOUT — very expensive and
+          // synchronous. It was re-run on every _applyBasemap call (immediate + 4 retry timers +
+          // idle = up to 6× per load, each re-laying-out every label), blocking the main thread
+          // and starving basemap tile rendering. The font never changes, so do it ONCE.
+          if (!this._fontsApplied) { gl.setLayoutProperty(id, 'text-font', [GLYPH_FONTSTACK]); }
           gl.setPaintProperty(id, 'text-opacity', opacity);
         } catch {
           /* icon-only symbol layer — no text-font / text-opacity to set */
@@ -455,6 +482,8 @@ export class Controller {
         }
       }
     }
+    this._fontsApplied = true;   // labels re-fonted once; retries now only touch cheap paint props
+    this._basemapApplied = true;
   }
 
   // -------- on-map Dark/Light switcher --------

@@ -50,6 +50,31 @@ class LinePath implements IPath {
     maxLatitude: number;
 }
 
+/** One merged corridor segment: the stretch of bundled geometry shared by `leafs` routes.
+ *  Its weight is the SUM of those routes' weights, so a shared corridor draws as ONE thick trunk
+ *  that thins where routes peel off — the Flow silhouette, on edge-bundled geometry. */
+class BundlePath implements IPath {
+    public readonly id: Key;
+    public leafs: Key[];
+    public weight = 0;
+    private _width = 0;
+    private _path: string;
+    constructor(id: string, path: string, leafs: Key[]) {
+        this.id = id;
+        this._path = path;
+        this.leafs = leafs;
+    }
+    public d(): string {
+        return this._path;
+    }
+    public width(scale?: Func<number, number>): number {
+        if (scale) {
+            this._width = scale(this.weight);
+        }
+        return this._width;
+    }
+}
+
 class helper {
     public static initPaths(root: ISelex, shape: IShape) {
         let conv = pointConverter(null);
@@ -149,8 +174,14 @@ class helper {
         return { paths, bound };
     }
 
-    /** Force-directed edge bundling: build one polyline LinePath per (src→tar) edge. */
-    public static bundle(srcLocs: ILocation[], tarLocs: ILocation[], trows: number[], weis: number[], opts: any) {
+    /** Force-directed edge bundling, drawn like Flow. One polyline per route merely stacks
+     *  overlapping lines, so instead the bundled geometry is collapsed into shared segments: at
+     *  every subdivision level the routes' points are clustered, routes travelling through the
+     *  same clusters become ONE segment carrying all of them, and consecutive levels with the
+     *  same membership chain into a single polyline. Width then comes from the summed weight
+     *  (see BundleShape.calc) — a thick common trunk that splits into thin branches near the
+     *  endpoints, across hubs, which the spider tree cannot do. */
+    public static bundle(srcLocs: ILocation[], tarLocs: ILocation[], trows: number[], opts: any) {
         const idx = [] as number[];
         for (let i = 0; i < trows.length; i++) {
             if (srcLocs[i] && tarLocs[i]) idx.push(i);
@@ -164,15 +195,72 @@ class helper {
             const s = pts[2 * k], t = pts[2 * k + 1];
             edges.push({ x0: s.x, y0: s.y, x1: t.x, y1: t.y });
         }
+        const paths = [] as BundlePath[];
         const routed = fdeb(edges, opts);
-        const paths = {} as StringMap<LinePath>;
-        for (let k = 0; k < idx.length; k++) {
-            const poly = routed[k], row = trows[idx[k]];
-            let str = 'M ' + Math.round(poly[0].x) + ' ' + Math.round(poly[0].y);
-            for (let m = 1; m < poly.length; m++) {
-                str += ' L ' + Math.round(poly[m].x) + ' ' + Math.round(poly[m].y);
+        const n = routed.length;
+        if (!n) {
+            return { paths, bound };
+        }
+        const levels = routed[0].length;
+
+        // Cluster tolerance: a small slice of the drawn extent. FDEB parks bundled points right
+        // on top of each other, so a coarse grid is enough to spot "same corridor".
+        let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+        for (const p of pts) {
+            mnx = Math.min(mnx, p.x); mxx = Math.max(mxx, p.x);
+            mny = Math.min(mny, p.y); mxy = Math.max(mxy, p.y);
+        }
+        // Cluster tolerance, tied to the user's Merge radius so one slider governs both which
+        // routes FDEB pulls together and how tightly they must run to count as one trunk. FDEB
+        // only closes the gap by roughly half, so the tolerance has to be a real fraction of the
+        // merge radius — measured: ~0.7x lands on the sweet spot (about half the segments shared,
+        // fattest trunk carrying ~80 routes) without snapping unrelated routes together.
+        const span = (Math.max(mxx - mnx, mxy - mny) || 1);
+        const prox = (opts && +opts.proximity > 0) ? +opts.proximity : 70;
+        const cell = span * (prox / 1000) * 0.7;
+
+        // Per level: the cluster each route sits in + each cluster's mean point. The two end
+        // levels key on the exact point instead, so a route always starts/ends on its own airport
+        // (identical airports still share a cluster; different ones never get averaged together).
+        const keyAt = [] as string[][];
+        const midAt = [] as StringMap<{ x: number, y: number, n: number }>[];
+        for (let k = 0; k < levels; k++) {
+            const ends = (k === 0 || k === levels - 1);
+            const keys = new Array<string>(n);
+            const cs = {} as StringMap<{ x: number, y: number, n: number }>;
+            for (let e = 0; e < n; e++) {
+                const p = routed[e][k];
+                const key = ends
+                    ? Math.round(p.x) + ',' + Math.round(p.y)
+                    : Math.round(p.x / cell) + ',' + Math.round(p.y / cell);
+                keys[e] = key;
+                const c = cs[key] || (cs[key] = { x: 0, y: 0, n: 0 });
+                c.x += p.x; c.y += p.y; c.n++;
             }
-            paths[row] = new LinePath(str, row, weis[idx[k]]);
+            for (const key in cs) { cs[key].x /= cs[key].n; cs[key].y /= cs[key].n; }
+            keyAt.push(keys); midAt.push(cs);
+        }
+
+        // Emit ONE segment per level step per distinct cluster pair, carrying every route that
+        // makes that step. Chaining steps into longer polylines was tried and measured: cluster
+        // membership flickers as routes drift between cells, so runs kept breaking and each route
+        // shattered into ~5 stubs that each carried a single route — every line came out equally
+        // thin. Drawing per step instead keeps the summed width exact; the stubs meet on shared
+        // cluster centres and round linecaps join them into one continuous trunk.
+        for (let k = 0; k < levels - 1; k++) {
+            const groups = {} as StringMap<number[]>;
+            for (let e = 0; e < n; e++) {
+                const key = keyAt[k][e] + '>' + keyAt[k + 1][e];
+                (groups[key] || (groups[key] = [])).push(e);
+            }
+            for (const key in groups) {
+                const members = groups[key];
+                const head = members[0];
+                const a = midAt[k][keyAt[k][head]], b = midAt[k + 1][keyAt[k + 1][head]];
+                const str = 'M ' + Math.round(a.x) + ' ' + Math.round(a.y)
+                    + ' L ' + Math.round(b.x) + ' ' + Math.round(b.y);
+                paths.push(new BundlePath('b' + paths.length, str, members.map(e => trows[idx[e]])));
+            }
         }
         return { paths, bound };
     }
@@ -195,8 +283,55 @@ export function build(type: 'straight' | 'flow' | 'arc', d3: ISelex, src: ILocat
             const arc = helper.arc(src, tars, trows, weis);
             return new LineShape(d3, src, arc.paths, arc.bound);
         case 'straight':
+            // Internal-only fallback for large datasets (not a user-facing Type).
             const line = helper.line(src, tars, trows, weis);
             return new LineShape(d3, src, line.paths, line.bound);
+    }
+}
+
+/** Corridors drawn with the Flow silhouette. Geometry is fixed in level-20 coords, so a zoom
+ *  just rescales the group (no per-path rebuild); each merged segment's width is the summed
+ *  weight of the routes it carries, which is what produces the thick trunk / thin branches. */
+class BundleShape implements IShape {
+    public readonly d3: ISelex;
+    public readonly bound: IBound;
+    public readonly source: ILocation;
+    private _paths: BundlePath[];
+
+    constructor(d3: ISelex, src: ILocation, paths: BundlePath[], bound: IBound) {
+        this.source = src;
+        this.d3 = d3;
+        this._paths = paths;
+        this.bound = bound;
+        helper.initPaths(d3, this);
+    }
+
+    paths(): IPath[] {
+        return this._paths;
+    }
+
+    calc(weight: (row: number) => number): number[] {
+        for (const p of this._paths) {
+            let w = 0;
+            for (const l of p.leafs) { w += Math.max(weight(+l), 0); }
+            p.weight = w;
+        }
+        return extent(this._paths.map(p => p.weight));
+    }
+
+    rewidth() {
+        const factor = map20.factor($state.mapctl.map.getZoom());
+        const width = (v: number) => $state.width(v) / factor;
+        this.d3.att.scale(factor);
+        this.d3.selectAll<IPath>('.base').att.stroke_width(p => p.width(width));
+    }
+
+    transform(map: IMapShim, pzoom: number) {
+        // Pan (zoom unchanged): the scale factor and every stroke-width are identical to the
+        // previous frame, and VisualFlow._translate already repositions the group. Skip the
+        // O(paths) rewidth — only a zoom actually changes it. Mirrors FlowShape's guard.
+        if (map.getZoom() === pzoom) { return; }
+        this.rewidth();
     }
 }
 
@@ -205,15 +340,14 @@ export function buildBundle(d3: ISelex, rows: number[]): IShape {
     const cfg = $state.config;
     const srcLocs = rows.map(r => $state.loc(cfg.source(r)));
     const tarLocs = rows.map(r => $state.loc(cfg.target(r)));
-    const weis = rows.map(r => Math.max(cfg.weight.conv(r), 0));
     const b = cfg.bundle;
     const opts = {
         compatibility: b.compatibility, K: b.K, cycles: b.cycles, iterations: b.iterations,
         step: b.step, maxSubdivision: b.maxSubdivision, maxNeighbors: b.maxNeighbors,
         cone: b.cone, proximity: b.proximity, pointRadius: b.pointRadius, maxOffsetFrac: b.maxOffsetFrac,
     };
-    const { paths, bound } = helper.bundle(srcLocs, tarLocs, rows, weis, opts);
-    return new LineShape(d3, bound.anchor, paths, bound);
+    const { paths, bound } = helper.bundle(srcLocs, tarLocs, rows, opts);
+    return new BundleShape(d3, bound.anchor, paths, bound);
 }
 
 class FlowShape implements IShape {
